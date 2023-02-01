@@ -24,9 +24,11 @@ class RegressionMetric(Metric):
         self.mae = mean_absolute_error(y_true, y_pred)
         self.r2 = r2_score(y_true, y_pred)
 
-    def report(self):
-        print(f"MSE: {self.mse:15.2f}")
-        print(f"MAE: {self.mae:15.2f}")
-        print(f"R2:  {self.r2:15.2f}")
+    def report(self, precision=5):
+        print(f"MSE: {self.mse:15.{precision}f}")
+        print(f"MAE: {self.mae:15.{precision}f}")
+        print(f"R2:  {self.r2:15.{precision}f}")
+
+
 
 
