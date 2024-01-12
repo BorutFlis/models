@@ -23,7 +23,7 @@ class RFRegressorRunner(Runner):
     def __init__(self, ds: DataSource):
         self.X_train, self.X_test, self.y_train, self.y_test = ds.train_test()
         self.metric = RegressionMetric()
-        self.rf = RandomForestRegressor()
+        self.rf = RandomForestRegressor(max_depth=5, n_estimators=2000)
 
     def run(self) -> Metric:
         self.rf.fit(self.X_train, self.y_train)
