@@ -24,10 +24,22 @@ class RegressionMetric(Metric):
         self.mae = mean_absolute_error(y_true, y_pred)
         self.r2 = r2_score(y_true, y_pred)
 
+
     def report(self, precision=5):
         print(f"MSE: {self.mse:15.{precision}f}")
         print(f"MAE: {self.mae:15.{precision}f}")
         print(f"R2:  {self.r2:15.{precision}f}")
+
+
+@dataclass
+class RegressionMetricAdvanced(Metric):
+
+    def calculate(self, y_true: np.ndarray, y_pred: np.ndarray):
+        super().calculate(y_true, y_pred)
+        #TODO: add RRMSE 
+
+    def report(self, precision=5):
+        super().report(precision)
 
 
 
