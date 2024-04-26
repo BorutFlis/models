@@ -10,7 +10,8 @@ df = df.set_index("Id")
 
 output_dir = "../house_price_data/interim/shuffled"
 
-cols_to_shuffle = np.random.choice(df.select_dtypes(include=["float", "int"]).columns, 3, replace=False)
+shuffle_candidates = df.select_dtypes(include=["float", "int"]).apply(lambda x: x.nunique()).sort_values(ascending=False).iloc[:10].index
+cols_to_shuffle = np.random.choice(shuffle_candidates, 3, replace=False)
 split_df = np.array_split(df, 3)
 
 for i, i_df in enumerate(split_df):
