@@ -28,6 +28,44 @@ def identify_unique_sources(data, source_column='src'):
     return data[source_column].unique()
 
 
+def outliers_by_center_total_iqr(df, col):
+    q25 = df[col].quantile(0.25)
+    q75 = df[col].quantile(0.75)
+    iqr = q75 - q25
+    for multiplier_step in [1.5, 2, 2.5, 3]:
+        lower = q25 - iqr * multiplier_step
+        upper = q75 + iqr * multiplier_step
+
+        outliers = df[col].gt(upper) | df[col].lt(lower)
+        print(f"{multiplier_step} ")
+        print(df.assign(outliers=outliers).groupby("src")["outliers"].sum())
+
+
+def outliers_by_center_individual_iqr(df_full, col, iqr_multiplier=1.5):
+    for center in df_full["src"].unique():
+        df = df_full.query(f"src =='{center}'")
+        q25 = df[col].quantile(0.25)
+        q75 = df[col].quantile(0.75)
+        iqr = q75 - q25
+        upper = q75 + iqr * iqr_multiplier
+        lower = q25 - iqr * iqr_multiplier
+        n_outliers = df[col].gt(upper).sum() + df[col].lt(lower).sum()
+        print(f"{center}: {n_outliers}")
+
+
+def outliers_per_attr(df_floats: pd.DataFrame):
+    q25 = df_floats.quantile(0.25)
+    q75 = df_floats.quantile(0.75)
+    iqr = q75 - q25
+    for multiplier_step in [1.5, 2, 2.5, 3]:
+        lower = q25 - iqr * multiplier_step
+        upper = q75 + iqr * multiplier_step
+
+        n_outliers = (df_floats.gt(upper).sum() + df_floats.lt(lower).sum()).sort_values(ascending=False)
+        print(f"{multiplier_step} ")
+        print(n_outliers)
+
+
 def calculate_correlations(data, source_column='src'):
     """
     Calculate correlation matrices for each subset in the data, excluding pairs with less than 10% common non-NA values.
