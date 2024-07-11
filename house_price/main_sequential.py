@@ -14,8 +14,8 @@ from abstract_models.utils import sort_stratified_regression_group_k, get_most_i
 
 target_variable = "SalePrice"
 
-df = pd.read_csv("house_price_data/train.csv")
-df = df.select_dtypes(include=["int64", "float64"])
+raw_df = pd.read_csv("house_price_data/train.csv")
+df = raw_df.select_dtypes(include=["int64", "float64"])
 df = df.dropna().reset_index(drop=True)
 X = df.drop("SalePrice", axis=1)
 y = df["SalePrice"]
