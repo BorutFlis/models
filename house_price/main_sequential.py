@@ -9,7 +9,7 @@ from sklearn.preprocessing import KBinsDiscretizer
 
 # setting path
 sys.path.append('..')
-from abstract_models.utils import sort_stratified_regression_group_k
+from abstract_models.utils import sort_stratified_regression_group_k, get_most_important_feature
 
 
 target_variable = "SalePrice"
