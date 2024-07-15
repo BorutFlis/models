@@ -15,9 +15,14 @@ from abstract_models.utils import sort_stratified_regression_group_k, get_most_i
 target_variable = "SalePrice"
 
 raw_df = pd.read_csv("house_price_data/train.csv")
-df = raw_df.select_dtypes(include=["int64", "float64"])
-df = df.dropna().reset_index(drop=True)
-X = df.drop("SalePrice", axis=1)
+df = raw_df.copy()
+categorical = (df.dtypes.eq("object") & df.nunique().lt(20)).loc[lambda x: x].index
+categorical_int = (df.dtypes.eq("int") & df.nunique().lt(10)).loc[lambda x: x].index
+df[categorical] = df.loc[:, categorical].astype("category")
+df[categorical_int] = df.loc[:, categorical_int].astype("category")
+
+df = df.select_dtypes(include=["int", "float", "category"])
+X = df.dropna().reset_index(drop=True).drop("SalePrice", axis=1)
 y = df["SalePrice"]
 
 # Convert the target variable into decile bins
