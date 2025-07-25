@@ -5,10 +5,10 @@ import numpy as np
 import pandas as pd
 
 
-df = pd.read_csv("../house_price_data/train.csv")
+df = pd.read_csv("../data/train.csv")
 df = df.set_index("Id")
 
-output_dir = "../house_price_data/interim/shuffled"
+output_dir = "../data/interim/shuffled"
 
 shuffle_candidates = df.select_dtypes(include=["float", "int"]).apply(lambda x: x.nunique()).sort_values(ascending=False).iloc[:10].index
 cols_to_shuffle = np.random.choice(shuffle_candidates, 3, replace=False)

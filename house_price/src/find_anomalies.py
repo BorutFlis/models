@@ -9,7 +9,7 @@ from scipy.stats import shapiro, anderson, kstest
 
 
 def load_shuffle():
-    shuffle_dir = "../house_price_data/interim/shuffled"
+    shuffle_dir = "../data/interim/shuffled"
     gather_dfs = []
     for f in os.listdir(shuffle_dir):
         if f[-3:] == "csv":
@@ -22,7 +22,7 @@ def identify_unique_sources(data, source_column='src'):
     """
     Identify unique sources in the dataset.
 
-    :param data: DataFrame containing the data.
+    :param data: DataFrame containing the data_loader.
     :param source_column: Name of the column containing source identifiers.
     :return: List of unique sources.
     """
@@ -69,7 +69,7 @@ def outliers_per_attr(df_floats: pd.DataFrame):
 
 def calculate_correlations(data, source_column='src'):
     """
-    Calculate correlation matrices for each subset in the data, excluding pairs with less than 10% common non-NA values.
+    Calculate correlation matrices for each subset in the data_loader, excluding pairs with less than 10% common non-NA values.
     """
     unique_sources = identify_unique_sources(data, source_column)
     # Preparing a dictionary to hold correlation matrices for each source
@@ -143,7 +143,7 @@ def run_iterative_adversarial_validation(X, y, exit_auc_score=0.55, output=False
     gather_step_report = []
 
     while current_auc_score >= exit_auc_score and X.shape[1] > 1:
-        # Split data into train and validation sets
+        # Split data_loader into train and validation sets
         X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
 
         # Create and train the classifier

@@ -11,7 +11,7 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 # Load the Iris dataset
 X, y = datasets.load_iris(return_X_y=True)
 
-# Split the data into training and test sets
+# Split the data_loader into training and test sets
 X_train, X_test, y_train, y_test = train_test_split(
     X, y, test_size=0.3, random_state=42
 )
@@ -50,7 +50,7 @@ with mlflow.start_run():
     mlflow.log_metric("accuracy", accuracy)
 
     # Set a tag that we can use to remind ourselves what this run was for
-    mlflow.set_tag("Training Info", "Basic LR model for iris data")
+    mlflow.set_tag("Training Info", "Basic LR model for iris data_loader")
 
     # Infer the model signature
     signature = infer_signature(X_train, lr.predict(X_train))

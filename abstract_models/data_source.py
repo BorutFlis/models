@@ -10,3 +10,7 @@ class DataSource(ABC):
     @abstractmethod
     def train_test(self):
         pass
+
+    @abstractmethod
+    def get_cv_split_method(self):
+        pass

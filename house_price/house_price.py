@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from sklearn.inspection import plot_partial_dependence
 
 
-df = pd.read_csv("house_price_data/train.csv")
+df = pd.read_csv("data/train.csv")
 df = df.drop("Id", axis=1)
 y = df.pop("SalePrice")
 df = df.select_dtypes(include=["float64", "int64"]).dropna(axis=1)

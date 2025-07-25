@@ -1,5 +1,6 @@
 import sys
 import json
+
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import GridSearchCV
@@ -7,29 +8,29 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.preprocessing import KBinsDiscretizer
 import xgboost as xgb
+from sklearn.pipeline import Pipeline
 
-# setting path
-sys.path.append('..')
 from abstract_models.utils import sort_stratified_regression_group_k, get_most_important_feature
+from abstract_models.imputation import knn_imputer_missing_robust
 
 # Define parameter grids for both models
 rf_param_grid = {
-    'n_estimators': [100, 200, 300],
-    'max_depth': [10, 20, 30, None],
-    'min_samples_split': [2, 5, 10],
-    'min_samples_leaf': [1, 2, 4]
+    'rf__n_estimators': [100, 200, 300],
+    'rf__max_depth': [10, 20, 30, None],
+    'rf__min_samples_split': [2, 5, 10],
+    'rf__min_samples_leaf': [1, 2, 4]
 }
 
 xgb_param_grid = {
-    'max_depth': [3, 5, 7],
-    'learning_rate': [0.01, 0.1, 0.3],
-    'n_estimators': [100, 200, 300],
-    'min_child_weight': [1, 3, 5],
-    'subsample': [0.8, 0.9, 1.0]
+    'xgb__max_depth': [3, 5, 7],
+    'xgb__learning_rate': [0.01, 0.1, 0.3],
+    'xgb__n_estimators': [100, 200, 300],
+    'xgb__min_child_weight': [1, 3, 5],
+    'xgb__subsample': [0.8, 0.9, 1.0]
 }
 
-# Load and prepare data
-raw_df = pd.read_csv("house_price_data/train.csv")
+# Load and prepare data_loader
+raw_df = pd.read_csv("data/train.csv")
 df = raw_df.copy()
 categorical = (df.dtypes.eq("object") & df.nunique().lt(20)).loc[lambda x: x].index
 categorical_int = (df.dtypes.eq("int") & df.nunique().lt(10)).loc[lambda x: x].index
@@ -37,7 +38,7 @@ df[categorical] = df.loc[:, categorical].astype("category")
 df[categorical_int] = df.loc[:, categorical_int].astype("category")
 
 df = df.select_dtypes(include=["int", "float", "category"])
-X = df.dropna(axis=1).reset_index(drop=True).drop(["Id", "SalePrice"], axis=1)
+X = df.reset_index(drop=True).drop(["Id", "SalePrice"], axis=1)
 y = df["SalePrice"]
 
 # Convert categorical columns to numeric
@@ -46,9 +47,16 @@ X = pd.concat([
     pd.get_dummies(X.loc[:, X.dtypes.eq("category")]).astype(int)
 ], axis=1)
 
-# Initialize models
-rf_model = RandomForestRegressor(random_state=42)
-xgb_model = xgb.XGBRegressor(random_state=42)
+# Initialize models with pipelines
+rf_model = Pipeline([
+    ('imputer', knn_imputer_missing_robust),
+    ('rf', RandomForestRegressor(random_state=42))
+])
+
+xgb_model = Pipeline([
+    ('imputer', knn_imputer_missing_robust),
+    ('xgb', xgb.XGBRegressor(random_state=42))
+])
 
 # Perform GridSearchCV for both models
 rf_grid_search = GridSearchCV(
