@@ -8,17 +8,25 @@ from abstract_models.data_source import DataSource
 
 
 @dataclass
-class HousePriceSource(DataSource):
+class RealDataSource(DataSource):
     _data: pd.DataFrame
     dataset_name: str = "house_price"
     cv_n_fold: int = 5
     stratification = True
+    multi_class = True
 
     def xy(self):
         X = self._data.drop("SalePrice", axis=1)
         y = self._data["SalePrice"]
         if self.stratification:
-            y = y.gt(y.quantile(0.5)).astype(int)
+            if self.multi_class:
+                y = [
+                    y.gt(y.quantile(0.25)).astype(int)._set_name("SalePrice25"),
+                    y.gt(y.quantile(0.5)).astype(int)._set_name("SalePrice50"),
+                    y.gt(y.quantile(0.75)).astype(int)._set_name("SalePrice75")
+                ]
+            else:
+                y = [y.gt(y.quantile(0.5)).astype(int)._set_name("SalePrice50")]
         return (X, y)
 
     def train_test(self):
