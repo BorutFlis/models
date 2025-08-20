@@ -8,11 +8,11 @@ import mlflow
 from mlflow.models import infer_signature
 
 from abstract_models.runner import RFRegressorRunner
-from data_loader.source import HousePriceSource
+from data_loader.source import RealDataSource
 from data_loader.loader import load_data
 
 if __name__ == "__main__":
-    ds = HousePriceSource(load_data("data/train.csv"))
+    ds = RealDataSource(load_data("data/train.csv"))
 
     rf = RFRegressorRunner(ds)
     result = rf.run()
