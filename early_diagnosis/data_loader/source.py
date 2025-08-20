@@ -25,5 +25,7 @@ class EarlyDiagnosisSource(DataSource):
         X, y = self.xy()
         return train_test_split(X, y)
 
-    def get_cv_split_method(self):
-        return GroupKFold(n_splits=self.cv_n_fold)
+    def get_cv_split_method(self, n_folds_arg=None):
+        n_folds = n_folds_arg if n_folds_arg is not None else self.cv_n_fold
+
+        return GroupKFold(n_splits=n_folds)
