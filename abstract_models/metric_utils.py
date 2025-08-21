@@ -13,11 +13,17 @@ def compute_binary_classification_metrics(y_true, y_pred, y_proba):
     precision = precision_score(y_true, y_pred)
     sensitivity = recall_score(y_true, y_pred)  # aka Recall
     f1 = f1_score(y_true, y_pred)
-    auc = roc_auc_score(y_true, y_proba)
+    try:
+        auc = roc_auc_score(y_true, y_proba)
+    except ValueError:
+        auc = None
 
-    # Confusion matrix for specificity
-    tn, fp, fn, tp = confusion_matrix(y_true, y_pred).ravel()
-    specificity = tn / (tn + fp)
+    try:
+        # Confusion matrix for specificity
+        tn, fp, fn, tp = confusion_matrix(y_true, y_pred).ravel()
+        specificity = tn / (tn + fp)
+    except ValueError:
+        specificity = None
 
     # Return as a pandas Series
     return pd.Series({
