@@ -5,9 +5,10 @@ from sklearn.ensemble import RandomForestClassifier
 from xgboost import XGBClassifier
 from sklearn.model_selection import KFold
 from sklearn.metrics import classification_report
+from lightgbm import LGBMClassifier
 
 from abstract_models.imputation import median_imputer, median_imputer_missing
-from abstract_models.param_grid import rf_param_grid, xgb_param_grid
+from abstract_models.param_grid import rf_param_grid, xgb_param_grid, lgb_param_grid
 from abstract_models.experiment_utils import run_imputation_classifier_grid_search, run_imputation_classifier_random_search
 from abstract_models.metric_utils import compute_binary_classification_metrics
 
@@ -30,14 +31,15 @@ y = df[target_column].map({'M': 1, 'B': 0})
 # Classifiers
 classifiers = {
     "RandomForest": (RandomForestClassifier(), rf_param_grid),
-    "XGBoost": (XGBClassifier(use_label_encoder=False, eval_metric='logloss'), xgb_param_grid)
+    "XGBoost": (XGBClassifier(use_label_encoder=False, eval_metric='logloss'), xgb_param_grid),
+    "LightGBM": (LGBMClassifier(random_state=42), lgb_param_grid)
 }
 
 imputers = {
     "median": median_imputer
 }
 
-model_name = "XGBoost"
+model_name = "LightGBM"
 model = classifiers[model_name][0]
 model_grid = classifiers[model_name][1]
 

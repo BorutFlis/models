@@ -2,6 +2,7 @@ import os
 import json
 
 import pandas as pd
+import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 from xgboost import XGBClassifier
 from sklearn.model_selection import KFold
@@ -9,9 +10,10 @@ from sklearn.metrics import classification_report, auc, roc_curve
 import matplotlib
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
+from lightgbm import LGBMClassifier
 
-from abstract_models.imputation import median_imputer, median_imputer_missing
-from abstract_models.param_grid import rf_param_grid, xgb_param_grid
+from abstract_models.imputation import median_imputer, median_imputer_missing, ffill_median_imputer
+from abstract_models.param_grid import rf_param_grid, xgb_param_grid, lgb_param_grid
 from abstract_models.experiment_utils import run_imputation_classifier_grid_search, run_imputation_classifier_random_search
 from abstract_models.metric_utils import compute_binary_classification_metrics
 from early_diagnosis.data_loader.loader import load_data
@@ -28,12 +30,14 @@ target_container = ["Dia_HFD", "Dia_HFREF", "Dia_HFPEF"]
 # Classifiers
 classifiers = {
     "RandomForest": (RandomForestClassifier(), rf_param_grid),
-    "XGBoost": (XGBClassifier(use_label_encoder=False, eval_metric='logloss'), xgb_param_grid)
+    "XGBoost": (XGBClassifier(use_label_encoder=False, eval_metric='logloss'), xgb_param_grid),
+    "LightGBM": (LGBMClassifier(random_state=42), lgb_param_grid)
 }
 
 imputers = {
     "median": median_imputer,
-    "median_missing": median_imputer_missing
+    "median_missing": median_imputer_missing,
+    "median_ffill": ffill_median_imputer
 }
 
 
@@ -74,11 +78,11 @@ def plot_multiple_roc_curves(model_results_dict, title="ROC Curves for Multiple 
 
 test = True
 if test:
-    attr_groups_container = ["expert", "MICE", "expert_blood", "secondary"]
+    attr_groups_container = ["expert", "MICE", "expert_blood"]
     target_container = ["Dia_HFD"]
     classifiers = {
         "XGBoost": classifiers["XGBoost"],
-        "RandomForest": classifiers["RandomForest"]
+        "LightGBM": classifiers[ "LightGBM"]
     }
 
 for attr_group in attr_groups_container:
@@ -94,10 +98,8 @@ for attr_group in attr_groups_container:
             df = df.loc[df.loc[:, echo_cols].count(axis=1).gt(5)]
 
         data_source = EarlyDiagnosisSource(df, target=target)
-        groups = df["centre"]
         X, y = data_source.xy()
         X = X.loc[:, attrs]
-
 
         cv = data_source.get_cv_split_method()
         for model_name in classifiers.keys():
@@ -114,23 +116,24 @@ for attr_group in attr_groups_container:
             model = classifiers[model_name][0]
             model_grid = classifiers[model_name][1]
 
-            imputer_name = "median"
-            imputer = imputers["median"]
+            imputer_name = "median_ffill"
+            imputer = imputers["median_ffill"]
             gather_accuracies = []
 
-            for i, (train_index, test_index) in enumerate(cv.split(X, y, groups)):
+            for i, (train_index, test_index) in enumerate(cv(X, y)):
                 print(f"\ti: {i}")
-                X_train = X.iloc[train_index]
-                y_train = y.iloc[train_index]
-                groups_train = groups[train_index]
+                inner_data_source = EarlyDiagnosisSource(df.iloc[train_index], target=target)
+                X_train, y_train = data_source.xy()
+                X_train = X_train.loc[:, attrs]
+
                 X_test = X.iloc[test_index]
                 y_test = y.iloc[test_index]
 
-                cv_inner = data_source.get_cv_split_method(groups_train.nunique())
+                cv_inner = data_source.get_cv_split_method()
 
                 grid_search_results = run_imputation_classifier_random_search(
                     X_train, y_train, imputer, model, model_grid,
-                    cv=cv_inner.split(X_train, y_train, groups_train), n_iter=5, n_jobs=-1
+                    cv=cv_inner(X_train, y_train), n_iter=5, n_jobs=-1
                 )
                 y_pred = grid_search_results.predict(X_test)
 

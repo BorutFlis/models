@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from functools import partial
 
 import pandas as pd
 from sklearn.model_selection import train_test_split

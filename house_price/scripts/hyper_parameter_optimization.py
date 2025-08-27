@@ -3,11 +3,12 @@ import os
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 from xgboost import XGBClassifier
+from lightgbm import LGBMClassifier
 from sklearn.model_selection import KFold
 from sklearn.metrics import classification_report
 
 from abstract_models.imputation import median_imputer, median_imputer_missing
-from abstract_models.param_grid import rf_param_grid, xgb_param_grid
+from abstract_models.param_grid import rf_param_grid, xgb_param_grid, lgb_param_grid
 from abstract_models.experiment_utils import run_imputation_classifier_grid_search, run_imputation_classifier_random_search
 from abstract_models.metric_utils import compute_binary_classification_metrics, plot_multiple_roc_curves
 from house_price.data_loader.loader import load_data
@@ -23,7 +24,8 @@ X, y_container = data_source.xy()
 # Classifiers
 classifiers = {
     "RandomForest": (RandomForestClassifier(), rf_param_grid),
-    "XGBoost": (XGBClassifier(use_label_encoder=False, eval_metric='logloss'), xgb_param_grid)
+    "XGBoost": (XGBClassifier(use_label_encoder=False, eval_metric='logloss'), xgb_param_grid),
+    "LightGBM": (LGBMClassifier(random_state=42), lgb_param_grid)
 }
 
 imputers = {
