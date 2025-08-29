@@ -11,6 +11,7 @@ import matplotlib
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 from lightgbm import LGBMClassifier
+from imblearn.over_sampling import ADASYN
 
 from abstract_models.imputation import median_imputer, median_imputer_missing, ffill_median_imputer
 from abstract_models.param_grid import rf_param_grid, xgb_param_grid, lgb_param_grid
@@ -24,6 +25,8 @@ attr_selections = json.load(open(os.path.join(DATA_DIR, "expert_attr_selection.j
 
 gather_roc_curve_data = {}
 gather_confussion_matrix_data = {}
+gather_all_results = []
+
 attr_groups_container = ["expert", "MICE", "expert_blood", "secondary"]
 target_container = ["Dia_HFD", "Dia_HFREF", "Dia_HFPEF"]
 
@@ -78,11 +81,12 @@ def plot_multiple_roc_curves(model_results_dict, title="ROC Curves for Multiple 
 
 test = True
 if test:
-    attr_groups_container = ["expert", "MICE", "expert_blood"]
+    attr_groups_container = ["expert"]
     target_container = ["Dia_HFD"]
     classifiers = {
-        "XGBoost": classifiers["XGBoost"],
-        "LightGBM": classifiers[ "LightGBM"]
+        "LightGBM": classifiers[ "LightGBM"],
+        "RandomForest": classifiers["RandomForest"],
+        "XGBoost": classifiers["XGBoost"]
     }
 
 for attr_group in attr_groups_container:
@@ -94,8 +98,6 @@ for attr_group in attr_groups_container:
         df = df.dropna(subset=[target])
 
         attrs = attr_selections[attr_group] + ["Med_Sta"]
-        if attr_group == "secondary":
-            df = df.loc[df.loc[:, echo_cols].count(axis=1).gt(5)]
 
         data_source = EarlyDiagnosisSource(df, target=target)
         X, y = data_source.xy()
@@ -116,24 +118,50 @@ for attr_group in attr_groups_container:
             model = classifiers[model_name][0]
             model_grid = classifiers[model_name][1]
 
-            imputer_name = "median_ffill"
-            imputer = imputers["median_ffill"]
+            imputer_name = "median"
+            imputer = imputers["median"]
             gather_accuracies = []
 
             for i, (train_index, test_index) in enumerate(cv(X, y)):
                 print(f"\ti: {i}")
                 inner_data_source = EarlyDiagnosisSource(df.iloc[train_index], target=target)
-                X_train, y_train = data_source.xy()
+                X_train, y_train = inner_data_source.xy()
                 X_train = X_train.loc[:, attrs]
+
+                class_distribution = y_train.value_counts()
+                minority_class = class_distribution.idxmin()
+                n_minority_class = class_distribution[minority_class]
+
+                X_minority = X_train.loc[y_train.eq(minority_class)]
+                y_minority = y_train.loc[y_train.eq(minority_class)]
+
+                X_majority = X_train.loc[y_train.ne(minority_class)]
+                y_majority = y_train.loc[y_train.ne(minority_class)]
+
+                X_resample = pd.concat(
+                    [
+                        X_minority,
+                        X_majority.iloc[np.random.randint(0, len(X_majority), n_minority_class)]
+                    ]
+                )
+
+                y_resample = pd.concat(
+                    [
+                        y_minority,
+                        y_majority.iloc[np.random.randint(0, len(X_majority), n_minority_class)]
+                    ]
+                )
+
+                assert y_resample.value_counts().nunique() == 1
 
                 X_test = X.iloc[test_index]
                 y_test = y.iloc[test_index]
 
-                cv_inner = data_source.get_cv_split_method()
+                cv_inner = inner_data_source.get_cv_split_method(groups=df.loc[y_resample.index, "centre"])
 
                 grid_search_results = run_imputation_classifier_random_search(
-                    X_train, y_train, imputer, model, model_grid,
-                    cv=cv_inner(X_train, y_train), n_iter=5, n_jobs=-1
+                    X_resample, y_resample, imputer, model, model_grid,
+                    cv=cv_inner(X_resample, y_resample), n_iter=5, n_jobs=-1
                 )
                 y_pred = grid_search_results.predict(X_test)
 
@@ -160,6 +188,7 @@ for attr_group in attr_groups_container:
                 pd.DataFrame(gather_accuracies).assign(Model=model_name)
                 .assign(attr_group=attr_group).assign(target=target)
             )
+            gather_all_results.append(results_df)
             results_df.to_csv(
                 os.path.join(DATA_DIR, "results", f"{model_name}_{data_source.dataset_name}_{attr_group}_{target}.csv"),
                 index=None
