@@ -6,6 +6,8 @@ rf_param_grid = {
     'classifier__min_samples_leaf': [1, 2, 4],
     'classifier__class_weight': ["balanced", None]
 }
+rf_imbalanced_param_grid = rf_param_grid
+rf_imbalanced_param_grid['classifier__class_weight'] = ["balanced"]
 
 xgb_param_grid = {
     'classifier__max_depth': [3, 5, 7],
@@ -25,3 +27,5 @@ lgb_param_grid = {
     "classifier__n_estimators": [200, 500, 1000],  # More trees for smaller learning rates
     "classifier__boosting_type": ["gbdt", "dart"],  # "gbdt" standard, "dart" for dropout boosting
 }
+
+lgb_imbalanced_param_grid = {**lgb_param_grid, **{"classifier__scale_pos_weight": [20, 50, 100]}}
