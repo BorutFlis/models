@@ -69,6 +69,7 @@ X = X.drop([
     "ID", "date", 'days_to_HFD', 'days_in_observation', "days_in_db", 'Dia_HFD_patient', 'Dia_HFD_event'],
     axis=1)
 attrs = list(set(attr_selections["expert"]).intersection(X.columns)) + ['Med_LD_permanent']
+attrs.remove("Blo_NT")
 X = X.loc[:, attrs].rename(columns={"Med_LD_permanent": "Med_LD"})
 
 cv = data_source.get_cv_split_method()
@@ -100,3 +101,29 @@ for i, (train_index, test_index) in enumerate(cv(X, y)):
     gather_accuracies.append(
         results_dict
     )
+
+results_df = pd.DataFrame(gather_accuracies)
+
+nt_roc_curve_dict = json.load(open(os.path.join("..", "data_dump", "roc_curve_nt.json")))
+
+pred_df = pd.DataFrame(roc_curve_dict)
+pred_df = pd.concat([
+    pred_df.loc[:, ["y_test", "y_proba"]], pred_df["records"].apply(pd.Series).set_axis(["ID", "date"], axis=1)
+], axis=1)
+pred_df["y_pred"] = np.where(pred_df["y_proba"].gt(0.5), 1, 0)
+
+hf_pef_confirmed_HF_df = pd.read_csv(os.path.join(DATA_DIR, "raw", "hfpef_confirmed_HF.csv"))
+hf_pef_at_risk_df = pd.read_csv(os.path.join(DATA_DIR, "raw", "hfpef_at_risk.csv"))
+hf_pef_df = pd.concat([
+    hf_pef_confirmed_HF_df,
+    hf_pef_at_risk_df
+], ignore_index=True)
+
+
+hf_ref_confirmed_HF_df = pd.read_csv(os.path.join(DATA_DIR, "raw", "hfref_confirmed_HF.csv"))
+hf_ref_at_risk_df = pd.read_csv(os.path.join(DATA_DIR, "raw", "hfref_at_risk.csv"))
+hf_ref_df = pd.concat([
+    hf_ref_confirmed_HF_df,
+    hf_ref_at_risk_df
+], ignore_index=True)
+

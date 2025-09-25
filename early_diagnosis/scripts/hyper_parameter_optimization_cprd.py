@@ -23,8 +23,8 @@ df = df.iloc[np.random.randint(0, len(df), 10000)]
 
 # Classifiers
 classifiers = {
-    # "RandomForest": (RandomForestClassifier(), rf_param_grid),
-    #"XGBoost": (XGBClassifier(use_label_encoder=False, eval_metric='logloss'), xgb_param_grid),
+    "RandomForest": (RandomForestClassifier(), rf_param_grid),
+    "XGBoost": (XGBClassifier(use_label_encoder=False, eval_metric='logloss'), xgb_param_grid),
     "LightGBM": (LGBMClassifier(random_state=42), lgb_imbalanced_param_grid)
 }
 

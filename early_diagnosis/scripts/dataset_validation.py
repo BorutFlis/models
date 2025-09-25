@@ -70,7 +70,7 @@ X = X.drop([
     axis=1)
 attrs = list(set(attr_selections["expert"]).intersection(X.columns)) + ['Med_LD']
 X = X.rename(columns={"Med_LD_permanent": "Med_LD"}).loc[:, attrs]
-X["Med_LD"] = X["Med_LD"].map({1:"Y", 0: "N"})
+X["Med_LD"] = X["Med_LD"].map({1: "Y", 0: "N"})
 pipeline.fit(X, y)
 
 retro_df = load_data(os.path.join(DATA_DIR, "raw", "train.csv"))
@@ -85,3 +85,16 @@ y_pred = pipeline.predict(X_test)
 # test our assumptions of what y_proba will return
 assert pipeline.classes_[1] == 1
 y_proba = pipeline.predict_proba(X_test)[:, 1]
+
+
+retro_df["src"] = retro_df["centre"].map({"MA": "SERMAS", "FI": "UNIFI", "UT": "UMCU", "RE": "UHREG", "NS": "FoMUNS"})
+retro_df["hfd"] = retro_df[target].map({"Y": "Yes", "N": "No"})
+balanced_df["hfd"] = balanced_df[target].map({1: "Yes", 0: "No"})
+balanced_df["src"] = "CPRD"
+nt_df = pd.concat(
+    [
+        retro_df.loc[retro_df["src"].isin(["UNIFI", "UMCU", "FoMUNS"]), ["hfd", "Blo_NT", "src"]],
+        balanced_df.loc[:, ["hfd", "src", "Blo_NT"]]
+    ]
+)
+
