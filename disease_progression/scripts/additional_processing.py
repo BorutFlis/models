@@ -22,7 +22,27 @@ def year_stratification_labels(df: pd.DataFrame, years=(2, 5, 10)) -> pd.DataFra
 
 DATA_DIR = "../data"
 
-mortality_data = pd.read_csv(os.path.join(DATA_DIR, "raw", "surv_ind.csv"), index_col=0)
+gather_all_dfs = []
+all_files_path = os.path.join(DATA_DIR, "raw", "all_files")
+for f in os.listdir(os.path.join(DATA_DIR, "raw", "all_files")):
+    gather_all_dfs.append(
+        pd.read_csv(os.path.join(all_files_path, f), index_col=0)
+    )
 
-mortality_data = year_stratification_labels(mortality_data)
-mortality_data.to_csv(os.path.join(DATA_DIR, "processed", "classification.csv"))
+df = pd.concat(gather_all_dfs)
+
+hfref_df = pd.read_csv(os.path.join(DATA_DIR, "raw", "hfref_confirmed_HF.csv"))
+hfref_df = hfref_df.set_index("patid")
+df = pd.merge(df, hfref_df.loc[:, ["obsdate"]].add_prefix("hfref_"), left_index=True, right_index=True, how="left")
+
+hfpef_df = pd.read_csv(os.path.join(DATA_DIR, "raw", "hfpef_confirmed_HF.csv"))
+hfpef_df = hfpef_df.set_index("patid")
+df = pd.merge(df, hfpef_df.loc[:, ["obsdate"]].add_prefix("hfpef_"), left_index=True, right_index=True, how="left")
+df["HF_type"] = df["hfpef_obsdate"].mask(df["hfpef_obsdate"].notna(), "HFPEF").mask(df["hfref_obsdate"].notna(), "HFREF")
+df.loc[df["hfpef_obsdate"].notna() & df["hfref_obsdate"].notna(), "HF_type"] = np.nan
+
+df = df.drop(["hfref_obsdate", "hfpef_obsdate"], axis=1)
+
+df = year_stratification_labels(df)
+
+df.to_csv(os.path.join(DATA_DIR, "processed", "classification.csv"))

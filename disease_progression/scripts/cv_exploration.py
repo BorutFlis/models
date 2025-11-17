@@ -33,19 +33,21 @@ imputers = {
     "median_missing": median_imputer_missing
 }
 
-model_name = "LightGBM"
+model_name = "RandomForest"
 model = classifiers[model_name][0]
 model_grid = classifiers[model_name][1]
 target_container = [
     'death_2_Y', 'death_5_Y', 'death_10_Y'
 ]
-target = "death_10_Y"
+target = "death_5_Y"
 target_container.remove(target)
 
 imputer_name = "median_missing"
 imputer = imputers[imputer_name]
 
 pipeline = Pipeline(steps=[('preprocessor', imputer), ('classifier', model)])
+
+df = df.dropna(subset="HF_type")
 
 gather_roc_curve_data = {}
 df_step = df.dropna(subset=target)

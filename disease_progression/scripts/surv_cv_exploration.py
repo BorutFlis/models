@@ -11,8 +11,22 @@ from abstract_models.imputation import median_imputer
 
 DATA_DIR = "../data"
 
-mortality_data = pd.read_csv(os.path.join(DATA_DIR, "raw", "surv_ind.csv"), index_col=0)
+gather_all_dfs = []
+all_files_path = os.path.join(DATA_DIR, "raw", "all_files")
+for f in os.listdir(os.path.join(DATA_DIR, "raw", "all_files")):
+    gather_all_dfs.append(
+        pd.read_csv(os.path.join(all_files_path, f), index_col=0)
+    )
 
+mortality_data = pd.concat(gather_all_dfs)
+mortality_data.loc[mortality_data.loc[:, mortality_data.columns.str.startswith("summary_Blo")].count(axis=1).ge(12)]
+
+# cal_col = "summary_Blo_Cal"
+#
+# mortality_data = mortality_data.loc[mortality_data[cal_col].notna()]
+# mortality_data = mortality_data.loc[mortality_data.loc[:, mortality_data.columns.str.startswith("summary_Blo")].count(axis=1).ge(13)]
+
+print(f"Number of patients: {len(mortality_data)}")
 
 # Load example dataset
 data_x, data_y = load_veterans_lung_cancer()
@@ -42,7 +56,7 @@ event_times = np.zeros(n_samples)
 
 # Loop through each leave-one-out split
 for i, (train_index, test_index) in enumerate(cv_split.split(X)):
-    print(f"{i}/{len(X)}")
+    print(f"{i * len(test_index)}/{len(X)}")
     X_train, X_test = X.iloc[train_index], X.iloc[test_index]
     y_train, y_test = y[train_index], y[test_index]
 
