@@ -3,7 +3,7 @@ import os
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import LeaveOneOut, KFold
-from sksurv.ensemble import RandomSurvivalForest, GradientBoostingSurvivalAnalysis
+from sksurv.ensemble import RandomSurvivalForest, GradientBoostingSurvivalAnalysis, ComponentwiseGradientBoostingSurvivalAnalysis
 from sksurv.metrics import concordance_index_censored
 from sksurv.datasets import load_veterans_lung_cancer
 
@@ -12,18 +12,36 @@ from abstract_models.imputation import median_imputer
 DATA_DIR = "../data"
 
 gather_all_dfs = []
-all_files_path = os.path.join(DATA_DIR, "raw", "nt")
+all_files_path = os.path.join(DATA_DIR, "raw", "all_files")
 for f in os.listdir(all_files_path):
     gather_all_dfs.append(
         pd.read_csv(os.path.join(all_files_path, f), index_col=0)
     )
 
 mortality_data = pd.concat(gather_all_dfs)
+#big_data_filter = mortality_data.loc[:, mortality_data.columns.str.startswith("summary_Blo")].count(axis=1).ge(9)
+low_risk_df = mortality_data.query("death_patient == 0").sort_values(by="days_to_event", ascending=False).iloc[:1000]
+positive_df = mortality_data.query("death_patient == 1")
+high_risk_df = positive_df.iloc[np.random.random_integers(0, len(positive_df), 1000)]
+mortality_data = pd.concat([
+    low_risk_df,
+    high_risk_df
+])
+
 # mortality_data.loc[mortality_data.loc[:, mortality_data.columns.str.startswith("summary_Blo")].count(axis=1).ge(12)]
 
-filter_col = "summary_Blo_NT"
+# filter_col = "summary_Blo_NT"
 
-mortality_data = mortality_data.loc[mortality_data[filter_col].notna()]
+# mortality_data = mortality_data.loc[mortality_data[filter_col].notna()]
+# mortality_data = mortality_data.loc[big_data_filter]
+# mortality_data = mortality_data.iloc[np.random.randint(0, len(mortality_data), 10000)]
+
+# high_risk_df = mortality_data.loc[mortality_data["days_to_event"].lt(100) & mortality_data["death_patient"].eq(1)]
+# mortality_data = pd.concat([
+#     high_risk_df,
+#     mortality_data.loc[mortality_data["death_patient"].eq(0)].sort_values(by="days_to_event", ascending=False).iloc[:len(high_risk_df)]
+# ])
+
 # mortality_data = mortality_data.loc[mortality_data.loc[:, mortality_data.columns.str.startswith("summary_Blo")].count(axis=1).ge(13)]
 
 print(f"Number of patients: {len(mortality_data)}")
@@ -54,11 +72,18 @@ predicted_risks = np.zeros(n_samples)
 event_indicators = np.zeros(n_samples, dtype=bool)
 event_times = np.zeros(n_samples)
 
+rsf = RandomSurvivalForest(
+            n_estimators=25,
+            min_samples_split=10,
+            min_samples_leaf=15,
+            max_features="sqrt",
+            n_jobs=-1,
+            random_state=42
+        )
+
 estimators = {
-    "no regularization": GradientBoostingSurvivalAnalysis(learning_rate=1.0, max_depth=1, random_state=0),
-    "learning rate": GradientBoostingSurvivalAnalysis(learning_rate=0.1, max_depth=1, random_state=0),
-    "dropout": GradientBoostingSurvivalAnalysis(learning_rate=1.0, dropout_rate=0.1, max_depth=1, random_state=0),
-    "subsample": GradientBoostingSurvivalAnalysis(learning_rate=1.0, subsample=0.5, max_depth=1, random_state=0),
+    #"component_wise": ComponentwiseGradientBoostingSurvivalAnalysis(),
+    "rsf": rsf
 }
 
 for name, est in estimators.items():
