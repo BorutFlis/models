@@ -17,10 +17,11 @@ class EarlyDiagnosisSource(DataSource):
     cv_n_fold: int = 5
     stratification = True
     group_col = "centre"
+    target_map = {"Y": 1, "N": 0}
 
     def xy(self):
         X = self._data.drop(self.target, axis=1)
-        y = self._data[self.target].map({"Y": 1, "N": 0})
+        y = self._data[self.target].map(self.target_map)
         return (X, y)
 
     def train_test(self):
