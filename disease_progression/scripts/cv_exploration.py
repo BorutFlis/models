@@ -47,8 +47,6 @@ imputer = imputers[imputer_name]
 
 pipeline = Pipeline(steps=[('preprocessor', imputer), ('classifier', model)])
 
-df = df.dropna(subset="HF_type")
-
 gather_roc_curve_data = {}
 df_step = df.dropna(subset=target)
 df_step[target] = df_step[target].astype(int)
