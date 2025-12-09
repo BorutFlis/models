@@ -61,6 +61,7 @@ balanced_df = pd.concat(
         negative_df
     ], axis=0
 )
+balanced_df.to_csv(os.path.join(DATA_DIR, "processed", "balanced_ED_NT.csv"))
 
 data_source = EarlyDiagnosisCPRDSource(balanced_df, target=target)
 
@@ -103,8 +104,6 @@ for i, (train_index, test_index) in enumerate(cv(X, y)):
     )
 
 results_df = pd.DataFrame(gather_accuracies)
-
-nt_roc_curve_dict = json.load(open(os.path.join("..", "data_dump", "roc_curve_nt.json")))
 
 pred_df = pd.DataFrame(roc_curve_dict)
 pred_df = pd.concat([
