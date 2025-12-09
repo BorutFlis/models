@@ -84,7 +84,7 @@ if test:
     attr_groups_container = ["expert"]
     target_container = ["Dia_HFD"]
     classifiers = {
-        "LightGBM": classifiers[ "LightGBM"],
+        "LightGBM": classifiers["LightGBM"],
         "RandomForest": classifiers["RandomForest"],
         "XGBoost": classifiers["XGBoost"]
     }
@@ -97,9 +97,10 @@ for attr_group in attr_groups_container:
 
         df = df.dropna(subset=[target])
 
-        attrs = attr_selections[attr_group] + ["Med_Sta"]
+        attrs = attr_selections[attr_group] # + ["Med_Sta"]
 
-        data_source = EarlyDiagnosisSource(df, target=target)
+        data_source = EarlyDiagnosisSource(df, target=target, group_col="ID")
+
         X, y = data_source.xy()
         X = X.loc[:, attrs]
 
@@ -128,40 +129,40 @@ for attr_group in attr_groups_container:
                 X_train, y_train = inner_data_source.xy()
                 X_train = X_train.loc[:, attrs]
 
-                class_distribution = y_train.value_counts()
-                minority_class = class_distribution.idxmin()
-                n_minority_class = class_distribution[minority_class]
-
-                X_minority = X_train.loc[y_train.eq(minority_class)]
-                y_minority = y_train.loc[y_train.eq(minority_class)]
-
-                X_majority = X_train.loc[y_train.ne(minority_class)]
-                y_majority = y_train.loc[y_train.ne(minority_class)]
-
-                X_resample = pd.concat(
-                    [
-                        X_minority,
-                        X_majority.iloc[np.random.randint(0, len(X_majority), n_minority_class)]
-                    ]
-                )
-
-                y_resample = pd.concat(
-                    [
-                        y_minority,
-                        y_majority.iloc[np.random.randint(0, len(X_majority), n_minority_class)]
-                    ]
-                )
-
-                assert y_resample.value_counts().nunique() == 1
+                # class_distribution = y_train.value_counts()
+                # minority_class = class_distribution.idxmin()
+                # n_minority_class = class_distribution[minority_class]
+                #
+                # X_minority = X_train.loc[y_train.eq(minority_class)]
+                # y_minority = y_train.loc[y_train.eq(minority_class)]
+                #
+                # X_majority = X_train.loc[y_train.ne(minority_class)]
+                # y_majority = y_train.loc[y_train.ne(minority_class)]
+                #
+                # X_resample = pd.concat(
+                #     [
+                #         X_minority,
+                #         X_majority.iloc[np.random.randint(0, len(X_majority), n_minority_class)]
+                #     ]
+                # )
+                #
+                # y_resample = pd.concat(
+                #     [
+                #         y_minority,
+                #         y_majority.iloc[np.random.randint(0, len(X_majority), n_minority_class)]
+                #     ]
+                # )
+                #
+                # assert y_resample.value_counts().nunique() == 1
 
                 X_test = X.iloc[test_index]
                 y_test = y.iloc[test_index]
 
-                cv_inner = inner_data_source.get_cv_split_method(groups=df.loc[y_resample.index, "centre"])
+                cv_inner = inner_data_source.get_cv_split_method(groups=df.loc[y_train.index, "centre"])
 
                 grid_search_results = run_imputation_classifier_random_search(
-                    X_resample, y_resample, imputer, model, model_grid,
-                    cv=cv_inner(X_resample, y_resample), n_iter=5, n_jobs=-1
+                    X_train, y_train, imputer, model, model_grid,
+                    cv=cv_inner(X_train, y_train), n_iter=3, n_jobs=-1
                 )
                 y_pred = grid_search_results.predict(X_test)
 
@@ -193,3 +194,5 @@ for attr_group in attr_groups_container:
                 os.path.join(DATA_DIR, "results", f"{model_name}_{data_source.dataset_name}_{attr_group}_{target}.csv"),
                 index=None
             )
+
+all_results_df = pd.concat(gather_all_results)

@@ -15,9 +15,9 @@ class EarlyDiagnosisSource(DataSource):
     dataset_name: str = "early_diagnosis"
     target: str = "Dia_HFD"
     cv_n_fold: int = 5
-    stratification = True
-    group_col = "centre"
+    group_col: str = "centre"
     target_map = {"Y": 1, "N": 0}
+    stratification = True
 
     def xy(self):
         X = self._data.drop(self.target, axis=1)
