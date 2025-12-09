@@ -48,7 +48,7 @@ imputer = imputers[imputer_name]
 pipeline = Pipeline(steps=[('preprocessor', imputer), ('classifier', model)])
 
 gather_roc_curve_data = {}
-df_step = df.dropna(subset=target)
+df_step = df.dropna(subset=[target, "summary_Blo_Cre"])
 df_step[target] = df_step[target].astype(int)
 df_step = df_step.drop(target_container + ['days_to_event', 'death_patient'], axis=1)
 
@@ -88,7 +88,7 @@ for i, (train_index, test_index) in enumerate(cv(X, y)):
     )
 
 results_df = pd.DataFrame(gather_accuracies)
-results_path = os.path.join(DATA_DIR, "results", f"{model_name}_{data_source.dataset_name}_{target}")
+results_path = os.path.join(DATA_DIR, "results", f"{model_name}_{data_source.dataset_name}_{target}.csv")
 results_df.to_csv(os.path.join(results_path))
 
 

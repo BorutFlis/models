@@ -12,18 +12,19 @@ from abstract_models.imputation import median_imputer
 DATA_DIR = "../data"
 
 gather_all_dfs = []
-# all_files_path = os.path.join(DATA_DIR, "raw", "nt")
-# for f in os.listdir(all_files_path):
-#     gather_all_dfs.append(
-#         pd.read_csv(os.path.join(all_files_path, f), index_col=0)
-#     )
+all_files_path = os.path.join(DATA_DIR, "raw", "all_files")
+for f in os.listdir(all_files_path):
+    gather_all_dfs.append(
+        pd.read_csv(os.path.join(all_files_path, f), index_col=0)
+    )
 
-mortality_data = pd.read_csv(os.path.join(DATA_DIR, "raw", "surv_LVEF.csv"), index_col=0)
+mortality_data = pd.concat(gather_all_dfs)
+# mortality_data = pd.read_csv(os.path.join(DATA_DIR, "raw", "surv_LVEF.csv"), index_col=0)
 # mortality_data.loc[mortality_data.loc[:, mortality_data.columns.str.startswith("summary_Blo")].count(axis=1).ge(12)]
 
-filter_col = "summary_Blo_NT"
+filter_col = "summary_Blo_Cre"
 
-# mortality_data = mortality_data.loc[mortality_data[filter_col].notna()]
+mortality_data = mortality_data.loc[mortality_data[filter_col].notna()].iloc[:2000]
 # mortality_data = mortality_data.loc[mortality_data.loc[:, mortality_data.columns.str.startswith("summary_Blo")].count(axis=1).ge(13)]
 
 print(f"Number of patients: {len(mortality_data)}")
