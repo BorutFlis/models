@@ -61,7 +61,7 @@ balanced_df = pd.concat(
         negative_df
     ], axis=0
 )
-balanced_df.to_csv(os.path.join(DATA_DIR, "processed", "balanced_ED_NT.csv"))
+# balanced_df.to_csv(os.path.join(DATA_DIR, "processed", "balanced_ED_NT.csv"))
 
 data_source = EarlyDiagnosisCPRDSource(balanced_df, target=target)
 

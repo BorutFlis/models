@@ -19,7 +19,15 @@ from disease_progression.data_loader.source import ClassificationDPDataSource
 
 DATA_DIR = "../data"
 
-df = load_data(os.path.join(DATA_DIR, "processed", "classification.csv"))
+healthy_days_in_db_container = [1000, 3000, 5000]
+healthy_days_in_db = healthy_days_in_db_container[2]
+target = f"high_risk"
+
+df = load_data(os.path.join(DATA_DIR, "processed", "high_risk_balanced.csv"))
+# df[target] = pd.Series()
+# df.loc[df["days_to_event"].lt(90) & df["death_patient"].eq(1), target] = 1
+# df.loc[df["days_to_event"].gt(healthy_days_in_db) & df["death_patient"].eq(0), target] = 0
+
 
 # Classifiers
 classifiers = {
@@ -37,9 +45,9 @@ model_name = "RandomForest"
 model = classifiers[model_name][0]
 model_grid = classifiers[model_name][1]
 target_container = [
-    'death_2_Y', 'death_5_Y', 'death_10_Y'
+    'death_2_Y', 'death_5_Y', 'death_10_Y', target
 ]
-target = "death_5_Y"
+
 target_container.remove(target)
 
 imputer_name = "median_missing"
@@ -48,11 +56,12 @@ imputer = imputers[imputer_name]
 pipeline = Pipeline(steps=[('preprocessor', imputer), ('classifier', model)])
 
 gather_roc_curve_data = {}
-df_step = df.dropna(subset=[target, "summary_Blo_Cre"])
+df_step = df.dropna(subset=[target])
 df_step[target] = df_step[target].astype(int)
 df_step = df_step.drop(target_container + ['days_to_event', 'death_patient'], axis=1)
 
 data_source = ClassificationDPDataSource(df_step, target=target)
+data_source.dataset_name = "age_balanced_DP"
 
 X, y = data_source.xy()
 

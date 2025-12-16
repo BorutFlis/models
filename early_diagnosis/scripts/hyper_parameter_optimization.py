@@ -84,7 +84,7 @@ if test:
     attr_groups_container = ["expert"]
     target_container = ["Dia_HFD"]
     classifiers = {
-        "LightGBM": classifiers[ "LightGBM"],
+        "LightGBM": classifiers["LightGBM"],
         "RandomForest": classifiers["RandomForest"],
         "XGBoost": classifiers["XGBoost"]
     }
