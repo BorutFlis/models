@@ -26,6 +26,8 @@ balanced_df = pd.concat(
     ], axis=0
 )
 
+balanced_train_df = balanced_df.copy()
+
 hf_pef_confirmed_HF_df = pd.read_csv(os.path.join(DATA_DIR, "raw", "hfpef_confirmed_HF.csv"))
 hf_pef_at_risk_df = pd.read_csv(os.path.join(DATA_DIR, "raw", "hfpef_at_risk.csv"))
 hf_pef_df = pd.concat([

@@ -19,7 +19,7 @@ from early_diagnosis.data_loader.source import EarlyDiagnosisCPRDSource
 
 DATA_DIR = "../data"
 
-df = load_data(os.path.join(DATA_DIR, "processed", "early_diagnosis_NT.csv"))
+df = load_data(os.path.join(DATA_DIR, "processed", "age_balanced_ED_NT.csv"))
 
 attr_selections = json.load(open(os.path.join(DATA_DIR, "expert_attr_selection.json")))
 
@@ -48,22 +48,9 @@ imputer = imputers[imputer_name]
 pipeline = Pipeline(steps=[('preprocessor', imputer), ('classifier', model)])
 
 gather_roc_curve_data = {}
-df_step = df.dropna(subset=target)
-# remove all that are eventually diagnosed
-df_step = df_step.drop(df_step.index[df_step[target].eq(0) & df_step["Dia_HFD_patient"].eq(1)])
-df_step[target].value_counts()
-n_positive = df_step[target].value_counts()[1]
-negative_df = df_step.loc[df_step["Dia_HFD_patient"].eq(0)].sort_values(by="days_in_db", ascending=False).iloc[:n_positive]
 
-balanced_df = pd.concat(
-    [
-        df_step.loc[df_step[target].eq(1)],
-        negative_df
-    ], axis=0
-)
-# balanced_df.to_csv(os.path.join(DATA_DIR, "processed", "balanced_ED_NT.csv"))
 
-data_source = EarlyDiagnosisCPRDSource(balanced_df, target=target)
+data_source = EarlyDiagnosisCPRDSource(df, target=target)
 
 X, y = data_source.xy()
 X = X.drop([
