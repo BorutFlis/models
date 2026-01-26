@@ -45,4 +45,4 @@ df = df.drop(["hfref_obsdate", "hfpef_obsdate"], axis=1)
 
 df = year_stratification_labels(df)
 
-df.to_csv(os.path.join(DATA_DIR, "processed", "classification.csv"))
+# df.to_csv(os.path.join(DATA_DIR, "processed", "classification.csv"))

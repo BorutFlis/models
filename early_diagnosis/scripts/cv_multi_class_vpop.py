@@ -17,7 +17,7 @@ from imblearn.over_sampling import ADASYN
 from abstract_models.imputation import median_imputer, median_imputer_missing, ffill_median_imputer
 from abstract_models.param_grid import rf_param_grid, xgb_param_grid, lgb_param_grid
 from abstract_models.experiment_utils import run_imputation_classifier_grid_search, run_imputation_classifier_random_search
-from abstract_models.metric_utils import compute_binary_classification_metrics
+from abstract_models.metric_utils import compute_binary_classification_metrics, mean_std_metrics_output
 from early_diagnosis.data_loader.loader import load_data
 from early_diagnosis.data_loader.source import EarlyDiagnosisSource
 
@@ -27,6 +27,7 @@ DATA_DUMP_DIR = "../data_dump"
 attr_selections = json.load(open(os.path.join(DATA_DIR, "expert_attr_selection.json")))
 
 file_path = os.path.join(DATA_DIR, "raw", "train.csv")
+#file_path = os.path.join(DATA_DIR, "processed", "cprd_multiclass.csv")
 
 gather_roc_curve_data = {}
 gather_confussion_matrix_data = {}
@@ -89,9 +90,9 @@ if test:
     attr_groups_container = ["expert"]
     target_container = ['Dia_MULTI']
     classifiers = {
-        "LightGBM": classifiers["LightGBM"]#,
-        # "RandomForest": classifiers["RandomForest"],
-        # "XGBoost": classifiers["XGBoost"]
+        "LightGBM": classifiers["LightGBM"],
+        "RandomForest": classifiers["RandomForest"],
+        "XGBoost": classifiers["XGBoost"]
     }
 
 vpop_pct = 0.1
@@ -103,7 +104,7 @@ for i in range(0, 6):
             df = load_data(file_path)
 
             df = df.dropna(subset=[target])
-            #df = df.rename(columns={"Med_LD_permanent": "Med_LD"})
+            df = df.rename(columns={"Med_LD_permanent": "Med_LD"})
 
             attrs = list(set(attr_selections[attr_group]).intersection(df.columns))  # + ["Med_Sta"]
 
@@ -200,9 +201,23 @@ for i in range(0, 6):
                     .assign(attr_group=attr_group).assign(target=target).assign(vpop_pct=vpop_pct)
                 )
                 gather_all_results.append(results_df)
-                results_df.to_csv(
-                    os.path.join(DATA_DIR, "results", f"{model_name}_{data_source.dataset_name}_{attr_group}_{target}.csv"),
-                    index=None
-                )
+                # results_df.to_csv(
+                #     os.path.join(DATA_DIR, "results", f"{model_name}_{data_source.dataset_name}_{attr_group}_{target}.csv"),
+                #     index=None
+                # )
 
 all_results_df = pd.concat(gather_all_results, ignore_index=True)
+all_results_df = all_results_df.rename(columns={
+    'accuracy': "Accuracy", 'recall_1': "Recall HFREF", 'recall_2':'Recall HFPEF', 'specificity': 'Specificity'}
+)
+
+output_df = mean_std_metrics_output(
+    all_results_df.loc[all_results_df["Model"].eq("RandomForest")],
+    columns=("Accuracy", "Recall HFREF", 'Recall HFPEF', 'Specificity'),
+    groupby_col="vpop_pct"
+)
+
+
+output_df = output_df.reset_index()
+output_df["vpop_pct"] = (output_df["vpop_pct"] * 100).astype(int)
+output_df.to_csv(os.path.join(DATA_DUMP_DIR, "vpop_retro_multi_class.csv"), index=None)
