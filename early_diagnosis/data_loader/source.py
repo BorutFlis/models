@@ -42,9 +42,9 @@ class EarlyDiagnosisCPRDSource(DataSource):
     _data: pd.DataFrame
     dataset_name: str = "early_diagnosis_cprd"
     target: str = "Dia_HFD"
-    cv_n_fold: int = 5
-    stratification = True
-    group_col = "ID"
+    cv_n_fold: int = 10
+    stratification: bool = True
+    group_col: str = "ID"
 
     def xy(self):
         X = self._data.drop(['Dia_HFD_6M', 'Dia_HFD_12M', 'Dia_HFD_18M'], axis=1)

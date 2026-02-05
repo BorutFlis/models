@@ -10,16 +10,17 @@ from sklearn.model_selection import KFold
 from sklearn.metrics import classification_report
 from sklearn.pipeline import Pipeline
 
+from abstract_models.pytorch_classifier import PyTorchNeuralNetworkClassifier
 from abstract_models.imputation import median_imputer, median_imputer_missing
-from abstract_models.param_grid import rf_param_grid, xgb_param_grid, lgb_param_grid, rf_imbalanced_param_grid, lgb_imbalanced_param_grid
+from abstract_models.param_grid import rf_param_grid, xgb_param_grid, lgb_param_grid, rf_imbalanced_param_grid, lgb_imbalanced_param_grid, nn_param_grid
 from abstract_models.experiment_utils import run_imputation_classifier_grid_search, run_imputation_classifier_random_search
-from abstract_models.metric_utils import compute_binary_classification_metrics, plot_multiple_roc_curves
+from abstract_models.metric_utils import compute_binary_classification_metrics, plot_multiple_roc_curves, binary_metrics_by_age_cohort
 from early_diagnosis.data_loader.loader import load_data
 from early_diagnosis.data_loader.source import EarlyDiagnosisCPRDSource
 
 DATA_DIR = "../data"
 
-df = load_data(os.path.join(DATA_DIR, "processed", "age_balanced_ED_NT.csv"))
+df = load_data(os.path.join(DATA_DIR, "processed", "balanced_ED_NT.csv"))
 
 attr_selections = json.load(open(os.path.join(DATA_DIR, "expert_attr_selection.json")))
 
@@ -27,7 +28,8 @@ attr_selections = json.load(open(os.path.join(DATA_DIR, "expert_attr_selection.j
 classifiers = {
     "RandomForest": (RandomForestClassifier(), rf_param_grid),
     "XGBoost": (XGBClassifier(use_label_encoder=False, eval_metric='logloss'), xgb_param_grid),
-    "LightGBM": (LGBMClassifier(random_state=42), lgb_imbalanced_param_grid)
+    "LightGBM": (LGBMClassifier(random_state=42), lgb_imbalanced_param_grid),
+    "PyTorchNN": (PyTorchNeuralNetworkClassifier(random_state=42), nn_param_grid)
 }
 
 imputers = {
@@ -35,7 +37,7 @@ imputers = {
     "median_missing": median_imputer_missing
 }
 
-model_name = "LightGBM"
+model_name = "XGBoost"
 model = classifiers[model_name][0]
 model_grid = classifiers[model_name][1]
 target_container = [
@@ -57,8 +59,13 @@ X = X.drop([
     "ID", "date", 'days_to_HFD', 'days_in_observation', "days_in_db", 'Dia_HFD_patient', 'Dia_HFD_event'],
     axis=1)
 attrs = list(set(attr_selections["expert"]).intersection(X.columns)) + ['Med_LD_permanent']
-attrs.remove("Blo_NT")
-X = X.loc[:, attrs].rename(columns={"Med_LD_permanent": "Med_LD"})
+# attrs = [
+#     'Blo_NT', 'Blo_Cre', 'Phy_Age', 'Phy_Wei', 'Phy_Hei'
+# ]
+# attrs = list(set(df.columns[df.columns.str.startswith("Blo_")].to_list() + attrs))
+
+#attrs.remove("Blo_NT")
+X = X.loc[:, attrs] #.rename(columns={"Med_LD_permanent": "Med_LD"})
 
 cv = data_source.get_cv_split_method()
 roc_curve_dict = {

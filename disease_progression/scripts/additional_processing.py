@@ -20,6 +20,15 @@ def year_stratification_labels(df: pd.DataFrame, years=(2, 5, 10)) -> pd.DataFra
     return df
 
 
+def high_risk_stratification(df:pd.DataFrame, healthy_days_in_db_container = (1000, 3000, 5000)) -> pd.DataFrame:
+    for healthy_days_in_db in healthy_days_in_db_container:
+        target = f"high_risk_{healthy_days_in_db}"
+        df[target] = pd.Series()
+        df.loc[df["days_to_event"].lt(90) & df["death_patient"].eq(1), target] = 1
+        df.loc[df["days_to_event"].gt(healthy_days_in_db) & df["death_patient"].eq(0), target] = 0
+    return df
+
+
 DATA_DIR = "../data"
 
 gather_all_dfs = []
@@ -46,3 +55,5 @@ df = df.drop(["hfref_obsdate", "hfpef_obsdate"], axis=1)
 df = year_stratification_labels(df)
 
 # df.to_csv(os.path.join(DATA_DIR, "processed", "classification.csv"))
+
+df = pd.read_csv(os.path.join(DATA_DIR, "full_hes_mortality.csv"))
