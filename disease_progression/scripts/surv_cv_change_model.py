@@ -11,38 +11,10 @@ from abstract_models.imputation import median_imputer
 
 DATA_DIR = "../data"
 
-gather_all_dfs = []
-all_files_path = os.path.join(DATA_DIR, "raw", "all_files")
-for f in os.listdir(all_files_path):
-    gather_all_dfs.append(
-        pd.read_csv(os.path.join(all_files_path, f), index_col=0)
-    )
 
-mortality_data = pd.concat(gather_all_dfs)
-#big_data_filter = mortality_data.loc[:, mortality_data.columns.str.startswith("summary_Blo")].count(axis=1).ge(9)
-low_risk_df = mortality_data.query("death_patient == 0").sort_values(by="days_to_event", ascending=False).iloc[:1000]
-positive_df = mortality_data.query("death_patient == 1")
-high_risk_df = positive_df.iloc[np.random.random_integers(0, len(positive_df), 1000)]
-mortality_data = pd.concat([
-    low_risk_df,
-    high_risk_df
-])
-
-# mortality_data.loc[mortality_data.loc[:, mortality_data.columns.str.startswith("summary_Blo")].count(axis=1).ge(12)]
-
-# filter_col = "summary_Blo_NT"
-
-# mortality_data = mortality_data.loc[mortality_data[filter_col].notna()]
-# mortality_data = mortality_data.loc[big_data_filter]
-# mortality_data = mortality_data.iloc[np.random.randint(0, len(mortality_data), 10000)]
-
-# high_risk_df = mortality_data.loc[mortality_data["days_to_event"].lt(100) & mortality_data["death_patient"].eq(1)]
-# mortality_data = pd.concat([
-#     high_risk_df,
-#     mortality_data.loc[mortality_data["death_patient"].eq(0)].sort_values(by="days_to_event", ascending=False).iloc[:len(high_risk_df)]
-# ])
-
-# mortality_data = mortality_data.loc[mortality_data.loc[:, mortality_data.columns.str.startswith("summary_Blo")].count(axis=1).ge(13)]
+mortality_data = pd.read_csv(
+    os.path.join(DATA_DIR, "processed", "surv_selection.csv"), index_col=[0]
+)
 
 print(f"Number of patients: {len(mortality_data)}")
 
@@ -82,10 +54,12 @@ rsf = RandomSurvivalForest(
         )
 
 estimators = {
-    #"component_wise": ComponentwiseGradientBoostingSurvivalAnalysis(),
-    "rsf": rsf
+    "component_wise": ComponentwiseGradientBoostingSurvivalAnalysis(),
+    "rsf": rsf,
+    "Gradient Boosting": GradientBoostingSurvivalAnalysis()
 }
-
+gather_results = []
+gather_results_by_fold = []
 for name, est in estimators.items():
     # Loop through each leave-one-out split
     for i, (train_index, test_index) in enumerate(cv_split.split(X)):
@@ -111,10 +85,19 @@ for name, est in estimators.items():
         predicted_risks[test_index] = risk_score
         event_indicators[test_index] = y_test["Status"]
         event_times[test_index] = y_test["Survival_in_days"]
+        cindex_i = concordance_index_censored(
+            event_indicators[test_index], event_times[test_index], predicted_risks[test_index]
+        )[0]
+        gather_results_by_fold.append(
+            {"name": name, "c_index": cindex_i, "fold": i}
+        )
 
     # Evaluate performance (C-index)
     cindex = concordance_index_censored(
         event_indicators, event_times, predicted_risks
     )[0]
     print(f"{name} C-index: {cindex:.3f}")
+    gather_results.append(
+        {"name": name, "c_index": cindex}
+    )
 

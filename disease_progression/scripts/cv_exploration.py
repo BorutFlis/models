@@ -4,6 +4,7 @@ import json
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.svm import SVC
 from xgboost import XGBClassifier
 from lightgbm import LGBMClassifier
 from sklearn.model_selection import KFold
@@ -11,19 +12,20 @@ from sklearn.metrics import classification_report
 from sklearn.pipeline import Pipeline
 
 from abstract_models.imputation import median_imputer, median_imputer_missing
-from abstract_models.param_grid import rf_param_grid, xgb_param_grid, lgb_param_grid, rf_imbalanced_param_grid, lgb_imbalanced_param_grid
+from abstract_models.param_grid import rf_param_grid, xgb_param_grid, lgb_param_grid, rf_imbalanced_param_grid, lgb_imbalanced_param_grid, nn_param_grid, svm_param_grid
 from abstract_models.experiment_utils import run_imputation_classifier_grid_search, run_imputation_classifier_random_search
 from abstract_models.metric_utils import compute_binary_classification_metrics, plot_multiple_roc_curves
+from abstract_models.pytorch_classifier import PyTorchNeuralNetworkClassifier
 from disease_progression.data_loader.loader import load_data
 from disease_progression.data_loader.source import ClassificationDPDataSource
 
 DATA_DIR = "../data"
 
 healthy_days_in_db_container = [1000, 3000, 5000]
-healthy_days_in_db = healthy_days_in_db_container[2]
-target = f"high_risk"
+healthy_days_in_db = healthy_days_in_db_container[0]
+target = f"high_risk_{1000}"
 
-df = load_data(os.path.join(DATA_DIR, "processed", "high_risk_balanced.csv"))
+df = load_data(os.path.join(DATA_DIR, "processed", "high_risk_HES.csv"))
 # df[target] = pd.Series()
 # df.loc[df["days_to_event"].lt(90) & df["death_patient"].eq(1), target] = 1
 # df.loc[df["days_to_event"].gt(healthy_days_in_db) & df["death_patient"].eq(0), target] = 0
@@ -33,7 +35,9 @@ df = load_data(os.path.join(DATA_DIR, "processed", "high_risk_balanced.csv"))
 classifiers = {
     "RandomForest": (RandomForestClassifier(), rf_param_grid),
     "XGBoost": (XGBClassifier(use_label_encoder=False, eval_metric='logloss'), xgb_param_grid),
-    "LightGBM": (LGBMClassifier(random_state=42), lgb_imbalanced_param_grid)
+    "LightGBM": (LGBMClassifier(random_state=42), lgb_imbalanced_param_grid),
+    "PyTorchNN": (PyTorchNeuralNetworkClassifier(random_state=42), nn_param_grid),
+    "SVM": (SVC(probability=True, random_state=42), svm_param_grid)
 }
 
 imputers = {
@@ -45,12 +49,12 @@ model_name = "RandomForest"
 model = classifiers[model_name][0]
 model_grid = classifiers[model_name][1]
 target_container = [
-    'death_2_Y', 'death_5_Y', 'death_10_Y', target
+    'high_risk_1000', 'high_risk_3000', 'high_risk_5000'
 ]
 
 target_container.remove(target)
 
-imputer_name = "median_missing"
+imputer_name = "median"
 imputer = imputers[imputer_name]
 
 pipeline = Pipeline(steps=[('preprocessor', imputer), ('classifier', model)])
@@ -58,10 +62,10 @@ pipeline = Pipeline(steps=[('preprocessor', imputer), ('classifier', model)])
 gather_roc_curve_data = {}
 df_step = df.dropna(subset=[target])
 df_step[target] = df_step[target].astype(int)
-df_step = df_step.drop(target_container + ['days_to_event', 'death_patient'], axis=1)
+df_step = df_step.drop(target_container + ["date", 'days_to_event', 'death_patient'] + ['post_hosp_total_duration', 'post_hosp_n'], axis=1)
 
 data_source = ClassificationDPDataSource(df_step, target=target)
-data_source.dataset_name = "age_balanced_DP"
+data_source.dataset_name = "HES_addition"
 
 X, y = data_source.xy()
 
@@ -97,8 +101,8 @@ for i, (train_index, test_index) in enumerate(cv(X, y)):
     )
 
 results_df = pd.DataFrame(gather_accuracies)
-results_path = os.path.join(DATA_DIR, "results", f"{model_name}_{data_source.dataset_name}_{target}.csv")
-results_df.to_csv(os.path.join(results_path))
+#results_path = os.path.join(DATA_DIR, "results", f"{model_name}_{data_source.dataset_name}_{target}.csv")
+#results_df.to_csv(os.path.join(results_path))
 
 
 

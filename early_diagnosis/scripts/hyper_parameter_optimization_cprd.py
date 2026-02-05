@@ -8,9 +8,13 @@ from xgboost import XGBClassifier
 from lightgbm import LGBMClassifier
 from sklearn.model_selection import KFold
 from sklearn.metrics import classification_report
+from sklearn.svm import SVC
 
+from abstract_models.pytorch_classifier import PyTorchNeuralNetworkClassifier
 from abstract_models.imputation import median_imputer, median_imputer_missing
-from abstract_models.param_grid import rf_param_grid, xgb_param_grid, lgb_param_grid, rf_imbalanced_param_grid, lgb_imbalanced_param_grid
+from abstract_models.param_grid import (
+    rf_param_grid, xgb_param_grid, lgb_param_grid, rf_imbalanced_param_grid, lgb_imbalanced_param_grid, nn_param_grid, svm_param_grid
+)
 from abstract_models.experiment_utils import run_imputation_classifier_grid_search, run_imputation_classifier_random_search
 from abstract_models.metric_utils import compute_binary_classification_metrics, plot_multiple_roc_curves
 from early_diagnosis.data_loader.loader import load_data
@@ -23,14 +27,16 @@ df = load_data(os.path.join(DATA_DIR, "processed", "balanced_ED_NT.csv"))
 
 # Classifiers
 classifiers = {
-#   "RandomForest": (RandomForestClassifier(), rf_param_grid),
-#    "XGBoost": (XGBClassifier(use_label_encoder=False, eval_metric='logloss'), xgb_param_grid),
-    "LightGBM": (LGBMClassifier(random_state=42), lgb_param_grid)
+   #"RandomForest": (RandomForestClassifier(), rf_param_grid),
+    "XGBoost": (XGBClassifier(use_label_encoder=False, eval_metric='logloss'), xgb_param_grid)#,
+    #"LightGBM": (LGBMClassifier(random_state=42), lgb_param_grid),
+    #"PyTorchNN": (PyTorchNeuralNetworkClassifier(random_state=42), nn_param_grid),
+    #"SVM": (SVC(probability=True, random_state=42), svm_param_grid)
 }
 
 imputers = {
-    "median": median_imputer,
-    "median_missing": median_imputer_missing
+    "median": median_imputer # ,
+    # "median_missing": median_imputer_missing
 }
 
 # model_name = "XGBoost"
@@ -49,16 +55,23 @@ gather_results = []
 target_step = "Dia_HFD_12M"
 
 df_step = df.dropna(subset=target_step)
-data_source = EarlyDiagnosisCPRDSource(df_step, target=target_step)
+df_step["year"] = pd.to_datetime(df["date"]).dt.year
+data_source = EarlyDiagnosisCPRDSource(
+    df_step, target=target_step, group_col="ID", cv_n_fold=10,
+)
 
 X, y = data_source.xy()
 X = X.drop([
     "ID", "date", 'days_to_HFD', 'days_in_observation', "days_in_db", 'Dia_HFD_patient', 'Dia_HFD_event'],
     axis=1)
 attrs = list(set(attr_selections["expert"]).intersection(X.columns)) + ['Med_LD_permanent']
+# attrs = [
+#     'Blo_NT', 'Blo_Cre', 'Phy_Age', 'Phy_Wei', 'Phy_Hei'
+# ]
+
 X = X.loc[:, attrs]
 
-cv = data_source.get_cv_split_method()
+cv = data_source.get_cv_split_method(groups=df_step["year"])
 for model_name in classifiers.keys():
     model = classifiers[model_name][0]
     model_grid = classifiers[model_name][1]

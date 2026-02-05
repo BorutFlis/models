@@ -243,10 +243,12 @@ def binary_metrics_by_age_cohort(
 def mean_std_metrics_output(
         results_df: pd.DataFrame,
         columns=('Accuracy', 'AUC', 'Sensitivity (Recall)', 'Specificity', 'Precision', 'F1 Score'),
-        groupby_col="Model"
+        groupby_col="Model",
+        mean_round=3,
+        std_round=2
 ):
     output_df = (
-        results_df.groupby(groupby_col)[list(columns)].mean().round(2).astype(str) + " ± " + \
-        results_df.groupby(groupby_col)[list(columns)].std().round(2).astype(str)
+        results_df.groupby(groupby_col)[list(columns)].mean().round(mean_round).astype(str) + " ± " + \
+        results_df.groupby(groupby_col)[list(columns)].std().round(std_round).astype(str)
     )
     return output_df

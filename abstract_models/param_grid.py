@@ -29,3 +29,18 @@ lgb_param_grid = {
 }
 
 lgb_imbalanced_param_grid = {**lgb_param_grid, **{"classifier__scale_pos_weight": [20, 50, 100]}}
+
+nn_param_grid = {
+    'classifier__hidden_layers': [[64], [64, 32], [128, 64], [128, 64, 32]],
+    'classifier__dropout_rate': [0.0, 0.2, 0.3],
+    'classifier__learning_rate': [0.001, 0.01, 0.0001],
+    'classifier__batch_size': [32, 64, 128],
+    'classifier__epochs': [50, 100]
+}
+
+svm_param_grid = {
+    'classifier__C': [0.1, 1.0, 10.0],
+    'classifier__kernel': ['rbf', 'linear', 'poly'],
+    'classifier__gamma': ['scale', 'auto'],
+    'classifier__class_weight': ['balanced', None]
+}
