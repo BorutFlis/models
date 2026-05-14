@@ -11,20 +11,13 @@ from abstract_models.imputation import median_imputer
 
 DATA_DIR = "../data"
 
-gather_all_dfs = []
-all_files_path = os.path.join(DATA_DIR, "raw", "all_files")
-for f in os.listdir(all_files_path):
-    gather_all_dfs.append(
-        pd.read_csv(os.path.join(all_files_path, f), index_col=0)
-    )
 
-mortality_data = pd.concat(gather_all_dfs)
+mortality_data = pd.read_csv(os.path.join(DATA_DIR, "processed", "high_risk_HES_big.csv"), index_col=0)
+mortality_data = mortality_data.iloc[np.random.choice(len(mortality_data), 5000, replace=False)]
+
 # mortality_data = pd.read_csv(os.path.join(DATA_DIR, "raw", "surv_LVEF.csv"), index_col=0)
 # mortality_data.loc[mortality_data.loc[:, mortality_data.columns.str.startswith("summary_Blo")].count(axis=1).ge(12)]
 
-filter_col = "summary_Blo_Cre"
-
-mortality_data = mortality_data.loc[mortality_data[filter_col].notna()].iloc[:2000]
 # mortality_data = mortality_data.loc[mortality_data.loc[:, mortality_data.columns.str.startswith("summary_Blo")].count(axis=1).ge(13)]
 
 print(f"Number of patients: {len(mortality_data)}")
@@ -33,7 +26,15 @@ print(f"Number of patients: {len(mortality_data)}")
 data_x, data_y = load_veterans_lung_cancer()
 
 # Convert structured array for convenience
-X = mortality_data.drop(['death_patient', "days_to_event"], axis=1)
+X = mortality_data.drop(
+    (['high_risk_1000', 'high_risk_3000', 'high_risk_5000'] +
+    [
+        'death_2_Y', 'death_5_Y', 'death_10_Y', "date",
+        'days_to_event', 'death_patient', 'death_event', 'post_all_hosp_total_duration', 'post_all_hosp_n',
+        'post_emmergency_hosp_total_duration', 'post_emmergency_hosp_n', 'cprd_ddate', 'regenddate', 'yob',
+        'regstartdate'
+    ]  +
+    ['death_patient', "days_to_event"]), axis=1)
 X = pd.DataFrame(median_imputer.fit_transform(X), index=mortality_data.index)
 
 y_df = mortality_data.loc[:, ['death_patient', "days_to_event"]]

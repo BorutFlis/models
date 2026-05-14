@@ -56,4 +56,4 @@ df = year_stratification_labels(df)
 
 # df.to_csv(os.path.join(DATA_DIR, "processed", "classification.csv"))
 
-df = pd.read_csv(os.path.join(DATA_DIR, "full_hes_mortality.csv"))
+# df = pd.read_csv(os.path.join(DATA_DIR, "full_hes_mortality.csv"))
