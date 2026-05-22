@@ -35,3 +35,35 @@ def run_imputation_classifier_random_search(X, y, preprocessor: ColumnTransforme
     grid_search.fit(X, y)
     return grid_search
 
+def balance_classes_undersample(df, target_col, random_state=None):
+    """
+    Balance classes in a DataFrame by undersampling all classes
+    to match the size of the minority class while preserving
+    the original index.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Input dataframe.
+    target_col : str
+        Name of the target/class column.
+    random_state : int, optional
+        Random seed for reproducibility.
+
+    Returns
+    -------
+    pd.DataFrame
+        Balanced dataframe with original indices preserved.
+    """
+
+    # Size of the minority class
+    min_count = df[target_col].value_counts().min()
+
+    # Sample each class down to min_count
+    balanced_df = (
+        df.groupby(target_col, group_keys=False)
+          .apply(lambda x: x.sample(n=min_count, random_state=random_state))
+    )
+
+    return balanced_df
+

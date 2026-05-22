@@ -13,8 +13,8 @@ from sklearn.pipeline import Pipeline
 
 from abstract_models.imputation import median_imputer, median_imputer_missing
 from abstract_models.param_grid import rf_param_grid, xgb_param_grid, lgb_param_grid, rf_imbalanced_param_grid, lgb_imbalanced_param_grid, nn_param_grid, svm_param_grid
-from abstract_models.experiment_utils import run_imputation_classifier_grid_search, run_imputation_classifier_random_search
-from abstract_models.metric_utils import compute_binary_classification_metrics, plot_multiple_roc_curves
+from abstract_models.experiment_utils import run_imputation_classifier_grid_search, run_imputation_classifier_random_search, balance_classes_undersample
+from abstract_models.metric_utils import compute_binary_classification_metrics, compute_binary_classification_metrics_adjusted, plot_multiple_roc_curves
 from disease_progression.data_loader.loader import load_data
 from disease_progression.data_loader.source import ClassificationDPDataSource, ClassificationDPDataSourceStratifiedCV
 
@@ -22,7 +22,7 @@ DATA_DIR = "../data"
 
 healthy_days_in_db_container = [1000, 3000, 5000]
 healthy_days_in_db = healthy_days_in_db_container[0]
-target = f"high_risk_{1000}"
+target = "high_risk_1000_adjusted_no_hosp"
 
 df = load_data(os.path.join(DATA_DIR, "processed", "high_risk_HES_big.csv"))
 # df[target] = pd.Series()
@@ -47,7 +47,7 @@ model_name = "RandomForest"
 model = classifiers[model_name][0]
 model_grid = classifiers[model_name][1]
 target_container = [
-    'high_risk_1000', 'high_risk_3000', 'high_risk_5000'
+    'high_risk_1000', 'high_risk_3000', 'high_risk_5000', "high_risk_1000_adjusted_no_hosp"
 ]
 
 target_container.remove(target)
@@ -60,13 +60,29 @@ pipeline = Pipeline(steps=[('preprocessor', imputer), ('classifier', model)])
 gather_roc_curve_data = {}
 df_step = df.dropna(subset=[target])
 df_step[target] = df_step[target].astype(int)
+
+# df_step = balance_classes_undersample(
+#     df_step,
+#     target
+# )
+
+# neg_df = df_step.loc[df_step[target].eq(0)]
+# pos_df = df_step.loc[df_step[target].eq(1)]
+# balance_neg_df = neg_df.iloc[np.random.choice(len(neg_df), len(pos_df), replace=False)]
+#
+# df_step = pd.concat([pos_df, balance_neg_df])
+
 to_drop_cols = []
 df_step = df_step.drop(
     target_container +
     [
-        'death_2_Y', 'death_5_Y', 'death_10_Y', "date",
-        'days_to_event', 'death_patient', 'death_event', 'post_all_hosp_total_duration', 'post_all_hosp_n',
-        'post_emmergency_hosp_total_duration', 'post_emmergency_hosp_n', 'cprd_ddate', 'regenddate', 'yob', 'regstartdate'
+        "date",'days_to_event', 'death_patient', 'death_event', 'post_all_hosp_total_duration', 'post_all_hosp_n',
+        'post_emmergency_hosp_total_duration', 'post_emmergency_hosp_n', 'cprd_ddate', 'regenddate', 'yob', 'regstartdate',
+        'post_all_hosp_total_duration_in_30_days', 'post_all_hosp_n_in_30_days', 'post_all_hosp_total_duration_in_60_days',
+        'post_all_hosp_n_in_60_days', 'post_all_hosp_total_duration_in_90_days', 'post_all_hosp_n_in_90_days',
+        'post_emmergency_hosp_total_duration_in_30_days', 'post_emmergency_hosp_n_in_30_days', 'post_emmergency_hosp_total_duration_in_60_days',
+        'post_emmergency_hosp_n_in_60_days', 'post_emmergency_hosp_total_duration_in_90_days', 'post_emmergency_hosp_n_in_90_days',
+        'post_emmergency_days_to_hosp'
     ],
     axis=1)
 
@@ -99,7 +115,7 @@ for i, (train_index, test_index) in enumerate(cv(X, y)):
     roc_curve_dict["y_proba"].extend(y_proba.tolist())
     roc_curve_dict["records"].extend(y_test.index)
 
-    results_dict = compute_binary_classification_metrics(y_test, y_pred, y_proba)
+    results_dict = compute_binary_classification_metrics_adjusted(y_test, y_pred, y_proba)
     results_dict["n_positive"] = y_test.sum()
     results_dict["n_total"] = len(y_test)
     gather_accuracies.append(
@@ -107,8 +123,8 @@ for i, (train_index, test_index) in enumerate(cv(X, y)):
     )
 
 results_df = pd.DataFrame(gather_accuracies)
-#results_path = os.path.join(DATA_DIR, "results", f"{model_name}_{data_source.dataset_name}_{target}.csv")
-#results_df.to_csv(os.path.join(results_path))
+results_path = os.path.join(DATA_DIR, "results", f"{model_name}_{data_source.dataset_name}_{target}.csv")
+results_df.to_csv(os.path.join(results_path))
 
 
 
