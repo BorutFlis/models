@@ -10,7 +10,6 @@ from sklearn.model_selection import KFold
 from sklearn.metrics import classification_report
 from sklearn.pipeline import Pipeline
 
-from abstract_models.pytorch_classifier import PyTorchNeuralNetworkClassifier
 from abstract_models.imputation import median_imputer, median_imputer_missing
 from abstract_models.param_grid import rf_param_grid, xgb_param_grid, lgb_param_grid, rf_imbalanced_param_grid, lgb_imbalanced_param_grid, nn_param_grid
 from abstract_models.experiment_utils import run_imputation_classifier_grid_search, run_imputation_classifier_random_search
@@ -28,8 +27,7 @@ attr_selections = json.load(open(os.path.join(DATA_DIR, "expert_attr_selection.j
 classifiers = {
     "RandomForest": (RandomForestClassifier(), rf_param_grid),
     "XGBoost": (XGBClassifier(use_label_encoder=False, eval_metric='logloss'), xgb_param_grid),
-    "LightGBM": (LGBMClassifier(random_state=42), lgb_imbalanced_param_grid),
-    "PyTorchNN": (PyTorchNeuralNetworkClassifier(random_state=42), nn_param_grid)
+    "LightGBM": (LGBMClassifier(random_state=42), lgb_imbalanced_param_grid)
 }
 
 imputers = {
