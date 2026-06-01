@@ -17,7 +17,7 @@ from early_diagnosis.data_loader.loader import load_data
 
 DATA_DIR = "../data"
 
-experiments_to_run = ["per_practice_cv"]
+experiments_to_run = ["sliding_window_validation"]
 attr_selections = json.load(open(os.path.join(DATA_DIR, "expert_attr_selection.json")))
 
 
@@ -43,16 +43,27 @@ if "per_practice_cv" in experiments_to_run:
         param_distributions=rf_param_grid,
         cv=None,
         scoring='accuracy',
-        n_jobs=2,
+        n_jobs=10,
         verbose=1,
         n_iter=5,
     )
-    per_practice_cv_results = run_cross_validation(split_func, pipeline, compute_binary_classification_metrics_adjusted, X, y)
+    per_practice_cv_results = run_cross_validation(split_func, base_model_process, compute_binary_classification_metrics_adjusted, X, y)
     k_fold = KFold(n_splits=10, shuffle=True)
     normal_cv_results = run_cross_validation(
-        k_fold.split, pipeline, compute_binary_classification_metrics_adjusted, X, y
+        k_fold.split, base_model_process, compute_binary_classification_metrics_adjusted, X, y
     )
 
+    per_practice_cmp_df = pd.concat([
+        per_practice_cv_results.assign(Validation_Type="By Practice"),
+        normal_cv_results.assign(Validation_Type="K-Fold")
+    ])
+    per_practice_cmp_df.to_csv(os.path.join(DATA_DIR, "results", "per_practice_cv.csv"))
+
+    per_practice_cv_display_df = mean_std_metrics_output(
+        per_practice_cmp_df,
+        groupby_col="Validation_Type"
+    )
+    per_practice_cv_display_df.to_csv(os.path.join(DATA_DIR, "results", "per_practice_cv_display.csv"))
 
 if "sliding_window_validation" in experiments_to_run:
     df = load_data(os.path.join(DATA_DIR, "processed", "balanced_ED_NT.csv"))
@@ -63,7 +74,7 @@ if "sliding_window_validation" in experiments_to_run:
     y = df["Dia_HFD_12M"]
 
     year = pd.to_datetime(df["date"]).dt.year
-    year_group = pd.cut(year, bins=[year.min(), 2010, 2015, 2020, year.max()])
+    year_group = pd.cut(year, bins=[year.min(), 2008, 2012, 2016, 2020, year.max()], include_lowest=True)
 
 
     pipeline = Pipeline(
@@ -83,3 +94,5 @@ if "sliding_window_validation" in experiments_to_run:
     time_cv_results = run_walk_forward_validation(
         X, y, year_group, base_model_process, metric_function=compute_binary_classification_metrics_adjusted
     )
+    time_cv_df = pd.DataFrame(time_cv_results)
+    time_cv_df.to_csv(os.path.join(DATA_DIR, "results", "sliding_window_validation.csv"))
