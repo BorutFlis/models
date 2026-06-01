@@ -23,7 +23,8 @@ from early_diagnosis.data_loader.source import EarlyDiagnosisCPRDSource
 DATA_DIR = "../data"
 
 df = load_data(os.path.join(DATA_DIR, "processed", "balanced_ED_NT.csv"))
-
+df = df.dropna(subset="pracid")
+df["pracid"] = df["pracid"].astype(int)
 
 # Classifiers
 classifiers = {
@@ -71,7 +72,7 @@ attrs = list(set(attr_selections["expert"]).intersection(X.columns)) + ['Med_LD_
 
 X = X.loc[:, attrs]
 
-cv = data_source.get_cv_split_method(groups=df_step["year"])
+cv = data_source.get_cv_split_method(groups=df_step["pracid"])
 for model_name in classifiers.keys():
     model = classifiers[model_name][0]
     model_grid = classifiers[model_name][1]
@@ -94,7 +95,7 @@ for model_name in classifiers.keys():
 
             grid_search_results = run_imputation_classifier_random_search(
                 X_train, y_train, imputer, model, model_grid,
-                cv=cv_inner(X_train, y_train), n_iter=15, n_jobs=-1
+                cv=cv_inner(X_train, y_train), n_iter=3, n_jobs=-1
             )
             y_pred = grid_search_results.predict(X_test)
 

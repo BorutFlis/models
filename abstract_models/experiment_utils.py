@@ -2,7 +2,7 @@ from typing import Callable
 
 from sklearn.compose import ColumnTransformer, make_column_selector
 from sklearn.pipeline import Pipeline
-from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
+from sklearn.model_selection import GridSearchCV, RandomizedSearchCV, BaseCrossValidator
 from sklearn.base import BaseEstimator, clone
 from sklearn.metrics import accuracy_score
 import numpy as np
@@ -360,3 +360,29 @@ def run_walk_forward_validation(
         )
 
     return period_test_results
+
+
+def run_cross_validation(
+    cv_split: BaseCrossValidator,
+    estimator: BaseEstimator,
+    metric_function: Callable,
+    X,
+    y,
+) -> pd.DataFrame:
+    scores = []
+
+    for train_idx, test_idx in cv_split(X, y):
+        model = clone(estimator)
+
+        X_train, X_test = X.iloc[train_idx], X.iloc[test_idx]
+        y_train, y_test = y.iloc[train_idx], y.iloc[test_idx]
+
+        model.fit(X_train, y_train)
+        y_pred = model.predict(X_test)
+        y_proba = model.predict_proba(X_test)[:, 1]
+
+        fold_metrics = metric_function(y_test, y_pred, y_proba)
+        scores.append(fold_metrics)
+
+    return pd.DataFrame(scores)
+

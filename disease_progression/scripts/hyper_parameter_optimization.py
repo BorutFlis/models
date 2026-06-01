@@ -1,3 +1,4 @@
+import json
 import os
 
 import pandas as pd
@@ -20,8 +21,10 @@ from disease_progression.data_loader.source import ClassificationDPDataSource
 
 DATA_DIR = "../data"
 
+attr_selection = json.load(open(os.path.join(DATA_DIR, "attr_selection.json")))
+
 healthy_days_in_db_container = [1000, 3000, 5000]
-healthy_days_in_db = healthy_days_in_db_container[1]
+healthy_days_in_db = healthy_days_in_db_container[0]
 target = "high_risk"
 
 df = load_data(os.path.join(DATA_DIR, "processed", "full_hes_mortality.csv"))
@@ -40,17 +43,17 @@ df_step[target] = df_step[target].astype(int)
 df_step = df_step.drop(['days_to_event', 'death_patient', 'date'] + ['post_hosp_total_duration', 'post_hosp_n'], axis=1)
 
 data_source = ClassificationDPDataSource(df_step, target=target)
-data_source.dataset_name = "HES_addition"
+data_source.dataset_name = "HES_addition_top"
 X, y = data_source.xy()
-
+X = X.loc[:, attr_selection["top"]]
 
 # Classifiers
 classifiers = {
-    #"RandomForest": (RandomForestClassifier(), rf_param_grid),
+    "RandomForest": (RandomForestClassifier(), rf_param_grid),
     #"XGBoost": (XGBClassifier(use_label_encoder=False, eval_metric='logloss'), xgb_param_grid),
-    #"LightGBM": (LGBMClassifier(random_state=42), lgb_imbalanced_param_grid),
-    "PyTorchNN": (PyTorchNeuralNetworkClassifier(random_state=42), nn_param_grid),
-    "SVM": (SVC(probability=True, random_state=42), svm_param_grid)
+    "LightGBM": (LGBMClassifier(random_state=42), lgb_imbalanced_param_grid) #,
+    #"PyTorchNN": (PyTorchNeuralNetworkClassifier(random_state=42), nn_param_grid),
+    #"SVM": (SVC(probability=True, random_state=42), svm_param_grid)
 }
 
 imputers = {
@@ -89,7 +92,7 @@ for model_name in classifiers.keys():
 
             grid_search_results = run_imputation_classifier_random_search(
                 X_train, y_train, imputer, model, model_grid,
-                cv=cv_inner(X_train, y_train), n_iter=3, n_jobs=-1
+                cv=cv_inner(X_train, y_train), n_iter=5, n_jobs=-1
             )
             y_pred = grid_search_results.predict(X_test)
 
