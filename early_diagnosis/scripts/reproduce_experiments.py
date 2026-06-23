@@ -11,7 +11,7 @@ from xgboost import XGBClassifier
 from abstract_models.param_grid import rf_param_grid, xgb_param_grid
 from abstract_models.experiment_utils import run_walk_forward_validation, run_cross_validation
 from abstract_models.imputation import median_imputer
-from abstract_models.metric_utils import compute_binary_classification_metrics_adjusted
+from abstract_models.metric_utils import compute_binary_classification_metrics_adjusted, mean_std_metrics_output
 from early_diagnosis.data_loader.loader import load_data
 
 
@@ -96,3 +96,7 @@ if "sliding_window_validation" in experiments_to_run:
     )
     time_cv_df = pd.DataFrame(time_cv_results)
     time_cv_df.to_csv(os.path.join(DATA_DIR, "results", "sliding_window_validation.csv"))
+
+if "survival_analysis_dp" in experiments_to_run:
+    pass
+

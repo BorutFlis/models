@@ -29,8 +29,7 @@ data_x, data_y = load_veterans_lung_cancer()
 X = mortality_data.drop(
     (['high_risk_1000', 'high_risk_3000', 'high_risk_5000'] +
     [
-        'death_2_Y', 'death_5_Y', 'death_10_Y', "date",
-        'days_to_event', 'death_patient', 'death_event', 'post_all_hosp_total_duration', 'post_all_hosp_n',
+         "date", 'days_to_event', 'death_patient', 'death_event', 'post_all_hosp_total_duration', 'post_all_hosp_n',
         'post_emmergency_hosp_total_duration', 'post_emmergency_hosp_n', 'cprd_ddate', 'regenddate', 'yob',
         'regstartdate'
     ]  +

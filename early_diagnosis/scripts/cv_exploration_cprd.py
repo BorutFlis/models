@@ -35,13 +35,13 @@ imputers = {
     "median_missing": median_imputer_missing
 }
 
-model_name = "XGBoost"
+model_name = "RandomForest"
 model = classifiers[model_name][0]
 model_grid = classifiers[model_name][1]
 target_container = [
     'Dia_HFD_6M', 'Dia_HFD_12M', 'Dia_HFD_18M'
 ]
-target = "Dia_HFD_12M"
+target = "HF_type"
 imputer_name = "median_missing"
 imputer = imputers[imputer_name]
 
@@ -49,7 +49,8 @@ pipeline = Pipeline(steps=[('preprocessor', imputer), ('classifier', model)])
 
 gather_roc_curve_data = {}
 
-
+df = df.dropna(subset=target)
+df[target] = df[target].map({"HFREF": 0, "HFPEF": 1})
 data_source = EarlyDiagnosisCPRDSource(df, target=target)
 
 X, y = data_source.xy()

@@ -57,4 +57,4 @@ balanced_df["Dia_MULTI"] = balanced_df["Dia_MULTI"].mask(balanced_df["obsdate_hf
 balanced_df["Dia_MULTI"] = balanced_df["Dia_MULTI"].mask(balanced_df["Dia_HFD_12M"].eq(0), "N")
 
 balanced_df = balanced_df.dropna(subset="Dia_MULTI")
-balanced_df.to_csv(os.path.join(DATA_DIR, "processed", "cprd_multiclass.csv"))
+#balanced_df.to_csv(os.path.join(DATA_DIR, "processed", "cprd_multiclass.csv"))
