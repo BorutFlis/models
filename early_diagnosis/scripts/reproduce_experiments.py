@@ -17,7 +17,7 @@ from early_diagnosis.data_loader.loader import load_data
 
 DATA_DIR = "../data"
 
-experiments_to_run = ["sliding_window_validation"]
+experiments_to_run = ["sliding_window_validation", "per_practice_cv"]
 attr_selections = json.load(open(os.path.join(DATA_DIR, "expert_attr_selection.json")))
 
 
