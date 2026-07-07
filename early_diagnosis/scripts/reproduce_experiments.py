@@ -16,10 +16,66 @@ from early_diagnosis.data_loader.loader import load_data
 
 
 DATA_DIR = "../data"
+DATA_DUMP_DIR = "../data_dump"
 
-experiments_to_run = ["sliding_window_validation", "per_practice_cv"]
+experiments_to_run = ["per_practice_cv"]
 attr_selections = json.load(open(os.path.join(DATA_DIR, "expert_attr_selection.json")))
 
+if "per_age_cohort_evaluation" in experiments_to_run:
+    df = load_data(os.path.join(DATA_DIR, "processed", "balanced_ED_NT.csv"))
+    df = load_balanced_dataset().dropna(subset=["Phy_Age", "Dia_HFD_12M"])
+    X, y = xy_for_expert_model(df)
+
+    base_model_process = make_base_model_process()
+    k_fold = StratifiedKFold(n_splits=10, shuffle=True, random_state=RANDOM_STATE)
+
+    age_prediction_df = collect_cv_predictions(
+        k_fold.split,
+        base_model_process,
+        X,
+        y,
+        metadata=df.loc[:, ["Phy_Age"]],
+    )
+
+    age_prediction_df.to_csv(
+        os.path.join(RESULTS_DIR, "per_age_cohort_evaluation_predictions.csv"),
+        index=False,
+    )
+
+    age_cohort_results_df = binary_metrics_by_age_cohort(
+        age_prediction_df["y_true"],
+        age_prediction_df["y_proba"],
+        age_prediction_df["Phy_Age"],
+    )
+    age_cohort_results_df.to_csv(
+        os.path.join(RESULTS_DIR, "per_age_cohort_evaluation.csv"),
+        index=False,
+    )
+
+    age_cohort_display_df = age_cohort_results_df.loc[
+        :,
+        [
+            "cohort",
+            "n",
+            "n_pos",
+            "n_neg",
+            "prevalence",
+            "roc_auc",
+            "accuracy",
+            "balanced_accuracy",
+            "precision",
+            "recall",
+            "specificity",
+            "f1",
+        ],
+    ].round(3)
+    age_cohort_display_df.to_csv(
+        os.path.join(RESULTS_DIR, "per_age_cohort_evaluation_display.csv"),
+        index=False,
+    )
+
+if "per_gender_cv" in experiments_to_run:
+    df = load_data(os.path.join(DATA_DIR, "processed", "balanced_ED_NT.csv"))
 
 if "per_practice_cv" in experiments_to_run:
     df = load_data(os.path.join(DATA_DIR, "processed", "balanced_ED_NT.csv"))
@@ -99,4 +155,3 @@ if "sliding_window_validation" in experiments_to_run:
 
 if "survival_analysis_dp" in experiments_to_run:
     pass
-
