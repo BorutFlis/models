@@ -4,7 +4,7 @@ import re
 import pandas as pd
 
 DATA_DIR = "../data"
-DATA_DUMP_DIR = "../data"
+DATA_DUMP_DIR = "../data_dump"
 
 result_files = [
     'RandomForest_classifcation_dp_death_10_Y',

@@ -10,7 +10,7 @@ from sklearn.model_selection import KFold
 from sklearn.metrics import classification_report
 from sklearn.svm import SVC
 
-from abstract_models.pytorch_classifier import PyTorchNeuralNetworkClassifier
+#from abstract_models.pytorch_classifier import PyTorchNeuralNetworkClassifier
 from abstract_models.imputation import median_imputer, median_imputer_missing
 from abstract_models.param_grid import (
     rf_param_grid, xgb_param_grid, lgb_param_grid, rf_imbalanced_param_grid, lgb_imbalanced_param_grid, nn_param_grid, svm_param_grid

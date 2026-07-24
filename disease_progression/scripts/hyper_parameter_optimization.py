@@ -15,7 +15,7 @@ from abstract_models.param_grid import (
 )
 from abstract_models.experiment_utils import run_imputation_classifier_grid_search, run_imputation_classifier_random_search
 from abstract_models.metric_utils import compute_binary_classification_metrics, plot_multiple_roc_curves
-from abstract_models.pytorch_classifier import PyTorchNeuralNetworkClassifier
+#from abstract_models.pytorch_classifier import PyTorchNeuralNetworkClassifier
 from disease_progression.data_loader.loader import load_data
 from disease_progression.data_loader.source import ClassificationDPDataSource
 
@@ -92,7 +92,7 @@ for model_name in classifiers.keys():
 
             grid_search_results = run_imputation_classifier_random_search(
                 X_train, y_train, imputer, model, model_grid,
-                cv=cv_inner(X_train, y_train), n_iter=5, n_jobs=-1
+                cv=cv_inner(X_train, y_train), n_iter=2, n_jobs=-1
             )
             y_pred = grid_search_results.predict(X_test)
 

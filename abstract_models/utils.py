@@ -118,3 +118,10 @@ def sort_stratified_regression_group_k(df, target, k=5):
     return gather_indices
 
 
+def std_mad_ratio(df: pd.DataFrame) -> pd.DataFrame:
+    std = df.std()
+    mad = np.abs(df - (df.mean())).mean()
+    std_mad = std / mad
+    return std_mad.sort_values(ascending=False)
+
+
