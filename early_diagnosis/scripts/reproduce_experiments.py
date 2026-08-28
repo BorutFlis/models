@@ -18,6 +18,7 @@ from early_diagnosis.data_loader.loader import load_data
 
 
 DATA_DIR = "../data"
+RESULTS_DIR = os.path.join(DATA_DIR, "results")
 DATA_DUMP_DIR = "../data_dump"
 
 experiments_to_run = ["risk_stratification"]
