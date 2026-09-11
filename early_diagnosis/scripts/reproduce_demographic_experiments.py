@@ -1,10 +1,11 @@
 import json
 import os
+from functools import partial
 
 import pandas as pd
 from sklearn.base import clone
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import RandomizedSearchCV, StratifiedKFold
+from sklearn.model_selection import RandomizedSearchCV, StratifiedKFold, GroupKFold
 from sklearn.pipeline import Pipeline
 
 from abstract_models.imputation import median_imputer
@@ -20,7 +21,7 @@ DATA_DIR = "../data"
 RESULTS_DIR = os.path.join(DATA_DIR, "results")
 RANDOM_STATE = 42
 
-experiments_to_run = ["per_gender_evaluation"]
+experiments_to_run = ["collect_diff_cv_predictions"]
 attr_selections = json.load(open(os.path.join(DATA_DIR, "expert_attr_selection.json")))
 
 
@@ -273,4 +274,37 @@ if "per_gender_evaluation" in experiments_to_run:
     per_gender_evaluation_display_df.to_csv(
         os.path.join(RESULTS_DIR, "per_gender_evaluation_display.csv"),
         index=False,
+    )
+
+if "collect_diff_cv_predictions" in experiments_to_run:
+    df = pd.read_csv(os.path.join(DATA_DIR, "processed", "balanced_ED_NT.csv"), index_col=[0, 1])
+
+    attrs = list(set(attr_selections["expert"]).intersection(df.columns)) + ['Med_LD_permanent']
+    attrs.remove("Phy_Sex")
+
+    X = df.loc[:, attrs]
+    y = df["Dia_HFD_12M"]
+
+    pipeline = Pipeline(
+        steps=[('preprocessor', median_imputer), ('classifier', RandomForestClassifier())]
+    )
+    cv_method = GroupKFold(n_splits=2)
+
+    split_func = partial(cv_method.split, groups=df["Phy_Sex"])
+    by_gender_cv_results = collect_cv_predictions(split_func, pipeline, X, y)
+    pracid_cv_method = GroupKFold(n_splits=10)
+
+    pracid_split_func = partial(pracid_cv_method.split, groups=df.loc[df["pracid"].notna(), "pracid"])
+
+    by_pracid_cv_results = collect_cv_predictions(
+        pracid_split_func, pipeline, X.loc[df["pracid"].notna()], y.loc[df["pracid"].notna()]
+    )
+
+    cv_preds = pd.merge(
+        by_gender_cv_results,
+        by_pracid_cv_results,
+        left_index=True,
+        right_index=True,
+        how="left",
+        suffixes=("_sex", "_pracid")
     )

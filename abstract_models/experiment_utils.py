@@ -386,3 +386,26 @@ def run_cross_validation(
 
     return pd.DataFrame(scores)
 
+def run_cross_validation_reg(
+    cv_split: BaseCrossValidator,
+    estimator: BaseEstimator,
+    metric_function: Callable,
+    X,
+    y,
+) -> pd.DataFrame:
+    scores = []
+
+    for train_idx, test_idx in cv_split(X, y):
+        model = clone(estimator)
+
+        X_train, X_test = X.iloc[train_idx], X.iloc[test_idx]
+        y_train, y_test = y.iloc[train_idx], y.iloc[test_idx]
+
+        model.fit(X_train, y_train)
+        y_pred = model.predict(X_test)
+
+        fold_metrics = metric_function(y_test, y_pred)
+        scores.append(fold_metrics)
+
+    return pd.DataFrame(scores)
+

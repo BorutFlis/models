@@ -9,11 +9,12 @@ from sklearn.pipeline import Pipeline
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import GridSearchCV, RandomizedSearchCV, KFold, GroupKFold
 from xgboost import XGBClassifier
+from imblearn.over_sampling import SMOTEN
 
 from abstract_models.param_grid import rf_param_grid, xgb_param_grid
 from abstract_models.experiment_utils import run_walk_forward_validation, run_cross_validation
 from abstract_models.imputation import median_imputer
-from abstract_models.metric_utils import compute_binary_classification_metrics_adjusted, mean_std_metrics_output
+from abstract_models.metric_utils import compute_binary_classification_metrics, compute_binary_classification_metrics_adjusted, mean_std_metrics_output
 from early_diagnosis.data_loader.loader import load_data
 
 
@@ -21,8 +22,141 @@ DATA_DIR = "../data"
 RESULTS_DIR = os.path.join(DATA_DIR, "results")
 DATA_DUMP_DIR = "../data_dump"
 
-experiments_to_run = ["risk_stratification"]
+experiments_to_run = ["per_gender_cv"] # ["risk_stratification"]
 attr_selections = json.load(open(os.path.join(DATA_DIR, "expert_attr_selection.json")))
+
+if "cv_by_center_class_balance_exploration" in experiments_to_run:
+    attr_selections = json.load(
+        open(os.path.join(DATA_DIR, "expert_attr_selection.json"))
+    )
+
+    attr_group = "expert"
+    attrs = attr_selections[attr_group]
+
+    target = "Dia_HFD"
+
+    # can add more classifiers
+    classifiers = {
+        "RandomForest": (RandomForestClassifier(), rf_param_grid)
+    }
+
+
+    file_location = os.path.join(DATA_DIR, "raw", "train.csv")
+    df = pd.read_csv(file_location, index_col=[0, 1])
+    df = pd.concat([df.index.to_frame(), df], axis=1)
+    df = df.dropna(subset=[target])
+
+    groups = df["centre"]
+    n_groups = df["centre"].nunique()
+    cv_method = GroupKFold(n_splits=n_groups)
+    cv_split_func = partial(cv_method.split, groups=groups)
+
+    X = df.loc[:, attrs]
+    y = df[target].map({"Y": 1, "N": 0})
+    imputer = median_imputer
+
+    gather_all_results = []
+
+    for model_name, (model, model_grid) in classifiers.items():
+
+        print(f"\n=== Model: {model_name} ===")
+
+        # ======================================================
+        # 🔁 INNER LOOP — vpop_pct
+        # ======================================================
+        for i_share in range(0, 6):
+            vpop_pct = 0.1 * i_share
+            print(f"\nvpop_pct = {vpop_pct:.1f}")
+
+
+
+            pipeline = Pipeline(
+                steps=[
+                    ("preprocessor", imputer),
+                    ("classifier", model),
+                ]
+            )
+
+            fold_results = []
+
+            for i, (train_idx, test_idx) in enumerate(cv_split_func(X, y)):
+                print(f"\tFold {i}")
+
+                X_train, y_train = X.iloc[train_idx], y.iloc[train_idx]
+                X_test, y_test = X.iloc[test_idx], y.iloc[test_idx]
+
+                test_center = (
+                    cv_split_func.keywords["groups"].iloc[test_idx].unique()[0]
+                )
+
+                # -------------------------
+                # Imputation + Resampling
+                # -------------------------
+                X_train_imp = pipeline["preprocessor"].fit_transform(
+                    X_train
+                )
+
+                if vpop_pct > 0:
+                    desired_len = int(len(X_train) / (1 - vpop_pct))
+                    n_new_samples = desired_len - len(X_train)
+
+                    positive_share = y_train.sum() / len(y_train)
+
+                    new_1_samples = int((1 - positive_share) * n_new_samples)
+                    new_0_samples = int(positive_share * n_new_samples)
+
+                    ada = SMOTEN(
+                        random_state=42,
+                        sampling_strategy={
+                            0: new_0_samples + y_train.eq(0).sum(),
+                            1: new_1_samples + y_train.eq(1).sum()
+                        },
+                    )
+                    X_res, y_res = ada.fit_resample(
+                        X_train_imp, y_train
+                    )
+                else:
+                    X_res, y_res = X_train_imp, y_train
+
+                # -------------------------
+                # Train & Predict
+                # -------------------------
+                pipeline["classifier"].fit(X_res, y_res)
+                y_pred = pipeline.predict(X_test)
+                y_proba = pipeline.predict_proba(X_test)[:, 1]
+
+                metrics = compute_binary_classification_metrics_adjusted(
+                    y_test, y_pred, y_proba
+                )
+
+                metrics = pd.concat([
+                    metrics,
+                    pd.Series(
+                        {
+                            "n_positive": y_test.sum(),
+                            "n_total": len(y_test),
+                            "n_positive_train": y_res.sum(),
+                            "n_total_train": len(y_res),
+                            "imputer": "median",
+                            "test_center": test_center,
+                            "vpop_pct": vpop_pct,
+                        }
+                    )
+                ])
+
+                fold_results.append(metrics)
+
+            results_df = (
+                pd.DataFrame(fold_results)
+                .assign(Model=model_name)
+                .assign(attr_group=attr_group)
+                .assign(target=target)
+            )
+
+            gather_all_results.append(results_df)
+
+
+
 
 if "per_age_cohort_evaluation" in experiments_to_run:
     df = load_data(os.path.join(DATA_DIR, "processed", "balanced_ED_NT.csv"))
@@ -84,7 +218,7 @@ if "per_gender_cv" in experiments_to_run:
     attrs = list(set(attr_selections["expert"]).intersection(df.columns)) + ['Med_LD_permanent']
     attrs.remove("Phy_Sex")
 
-    cv_method = GroupKFold()
+    cv_method = GroupKFold(n_splits=2)
 
     split_func = partial(cv_method.split, groups=df["Phy_Sex"])
 
