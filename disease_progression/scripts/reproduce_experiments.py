@@ -9,6 +9,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.base import BaseEstimator, clone
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.svm import SVC
+from sksurv.metrics import concordance_index_censored
 from xgboost import XGBClassifier
 from lightgbm import LGBMClassifier
 from sklearn.model_selection import RandomizedSearchCV, KFold, GroupKFold, StratifiedKFold, cross_val_score
@@ -51,14 +52,22 @@ if "cross_entropy_lambda_death" in experiments_to_run:
 
     X = df.loc[:, attr_selection]
     y = df[TARGET].astype(int)
-    exposure = df[EXPOSURE].astype(float)
+
+    df["adjusted_exposure"] = pd.Series(dtype="float")
+    max_exposure = df.loc[df[TARGET].eq(0), "days_to_event"].max()
+    df.loc[df[TARGET].eq(0), "adjusted_exposure"] = df.loc[df[TARGET].eq(0), "days_to_event"] / max_exposure
+    max_exposure = df.loc[df[TARGET].eq(1), "days_to_event"].max()
+    df.loc[df[TARGET].eq(1), "adjusted_exposure"] = (1 - df.loc[df[TARGET].eq(1), "days_to_event"] / max_exposure)
+
+    exposure = df["adjusted_exposure"].clip(lower=0.001)
 
     model = LGBMClassifier(
-        objective="cross_entropy_lambda",
+        objective="cross_entropy",
         n_estimators=500,
         learning_rate=0.03,
         num_leaves=31,
-        random_state=42
+        random_state=42,
+        reg_lambda=1
     )
     pipeline = Pipeline(steps=[('preprocessor', median_imputer), ('classifier', model)])
 
@@ -69,6 +78,7 @@ if "cross_entropy_lambda_death" in experiments_to_run:
     )
 
     auc_scores = []
+    gather_cindex = []
     logloss_scores = []
 
     for train_idx, test_idx in cv.split(X, y):
@@ -96,11 +106,19 @@ if "cross_entropy_lambda_death" in experiments_to_run:
         auc_scores.append(
             roc_auc_score(y_test, y_proba[:, 1])
         )
-
+        # Evaluate performance (C-index)
+        cindex = concordance_index_censored(
+            df.loc[X_test.index, "death_event"].astype(bool),
+            df.loc[X_test.index, "days_to_event"],
+            y_proba[:, 1]
+        )[0]
+        gather_cindex.append(cindex)
 
     print("AUC:")
     print(np.mean(auc_scores), "+/-", np.std(auc_scores))
 
+    print("cindex:")
+    print(np.mean(gather_cindex), "+/-", np.std(gather_cindex))
 
 if "horizon_based_classifier" in experiments_to_run:
     df = pd.read_csv(os.path.join(DATA_DIR, "processed", "high_risk_HES_big.csv"), index_col=0)
@@ -260,7 +278,7 @@ if "hospitalization_regression" in experiments_to_run:
             scoring='r2',
             n_jobs=10,
             verbose=1,
-            n_iter=3,
+            n_iter=15,
         )
         cv_method = KFold(n_splits=5)
         normal_cv_results = run_cross_validation_reg(
