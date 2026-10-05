@@ -1,13 +1,14 @@
+import math
+from typing import Callable
+
 import numpy as np
 import pandas as pd
-import math
-
 from sklearn.model_selection import KFold
 from lifelines import CoxPHFitter
 from lifelines.utils import concordance_index
 
 
-def chunk_cindex_calculations(df:pd.DataFrame, chunk: int = 100, time_diff_threshold: int = None):
+def chunk_cindex_calculations(df:pd.DataFrame, chunk: int = 100, filter_func: Callable = None):
     total_concordant = 0
     total_discordant = 0
     total_tied_risk = 0
@@ -15,8 +16,8 @@ def chunk_cindex_calculations(df:pd.DataFrame, chunk: int = 100, time_diff_thres
 
     for i in range(0, len(df), chunk):
         pair_df = get_unique_pairs(df.iloc[i:], 0, chunk)
-        if time_diff_threshold is not None:
-            pair_df = pair_df.loc[pair_df["time_diff"] > time_diff_threshold]
+        if filter_func is not None:
+            pair_df = pair_df.loc[filter_func]
         concordant, discordant, tied_risk, tied_time = count_concordant_discordant_pairs(pair_df)
         total_concordant += concordant
         total_discordant += discordant
@@ -30,12 +31,14 @@ def get_unique_pairs(df: pd.DataFrame, start_i=None,chunk=None) -> pd.DataFrame:
 
     if start_i is not None and chunk is not None:
         first_df = df.iloc[start_i : start_i + chunk]
+        chunk_size = len(first_df)
+
         pair_df = pd.merge(first_df, df, how="cross")
         unique_pair_df = pd.concat([
             pair_df.loc[~pair_df["patid_y"].isin(first_df["patid"].unique())],
             pair_df.loc[pair_df["patid_y"].isin(first_df["patid"].unique())].query("patid_x > patid_y")
         ])
-        assert len(unique_pair_df) == math.comb(chunk, 2) + (len(df) - chunk) * chunk
+        assert len(unique_pair_df) == math.comb(chunk_size, 2) + (len(df) - chunk_size) * chunk_size
 
     else:
         pair_df = pd.merge(df, df, how="cross")
@@ -46,11 +49,14 @@ def get_unique_pairs(df: pd.DataFrame, start_i=None,chunk=None) -> pd.DataFrame:
     return unique_pair_df
 
 
-def count_concordant_discordant_pairs(combinations_df: pd.DataFrame):
+def count_concordant_discordant_pairs(combinations_df: pd.DataFrame, round_estimate: int = 4):
     # examples with both censored can't be compared
     combinations_df = combinations_df.drop(combinations_df.index[combinations_df["death_event_x"].eq(0) & combinations_df["death_event_y"].eq(0)])
 
     event_combinations_df = combinations_df.loc[combinations_df["death_event_x"].eq(1) & combinations_df["death_event_y"].eq(1)]
+
+    event_combinations_df["estimate_x"] = event_combinations_df["estimate_x"].round(round_estimate)
+    event_combinations_df["estimate_y"] = event_combinations_df["estimate_y"].round(round_estimate)
 
     concordant_x = event_combinations_df["days_to_event_x"].gt(event_combinations_df["days_to_event_y"]) & event_combinations_df["estimate_x"].lt(event_combinations_df["estimate_y"])
     discordant_x = event_combinations_df["days_to_event_x"].gt(event_combinations_df["days_to_event_y"]) & event_combinations_df["estimate_x"].gt(event_combinations_df["estimate_y"])
@@ -58,9 +64,11 @@ def count_concordant_discordant_pairs(combinations_df: pd.DataFrame):
     concordant_y = event_combinations_df["days_to_event_y"].gt(event_combinations_df["days_to_event_x"]) & event_combinations_df["estimate_y"].lt(event_combinations_df["estimate_x"])
     discordant_y = event_combinations_df["days_to_event_y"].gt(event_combinations_df["days_to_event_x"]) & event_combinations_df["estimate_y"].gt(event_combinations_df["estimate_x"])
 
+    tied_estimate_filter = event_combinations_df["estimate_x"].eq(event_combinations_df["estimate_y"])
+    tied_time_filter = event_combinations_df["days_to_event_x"].eq(event_combinations_df["days_to_event_y"])
 
-    tied_risk = event_combinations_df["estimate_x"].eq(event_combinations_df["estimate_y"]).sum()
-    tied_time = event_combinations_df["days_to_event_x"].eq(event_combinations_df["days_to_event_y"]).sum()
+    tied_risk = tied_estimate_filter.sum()
+    tied_time = (tied_time_filter & ~tied_estimate_filter).sum()
 
     concordant = concordant_x.sum() + concordant_y.sum()
     discordant = discordant_x.sum() + discordant_y.sum()

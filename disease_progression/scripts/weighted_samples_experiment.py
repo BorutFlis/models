@@ -12,23 +12,21 @@ from abstract_models.param_grid import lgb_param_grid
 from abstract_models.experiment_utils import run_cross_validation, run_cross_validation_wei, run_cross_validation_wei_preds
 from abstract_models.metric_utils import compute_binary_classification_metrics_adjusted
 
+small_test = True
+
 DATA_DIR = "../data"
 DATA_DUMP_DIR = "../data_dump"
 RESULTS_DIR = os.path.join(DATA_DIR, "results")
 
 # "zero_days",
-targets = ['death_1_Y', 'death_2_Y', 'death_5_Y']
+target_container = ['death_1_Y', 'death_2_Y', 'death_5_Y']
 
-attr_selection = [
-    "Sym_DAR__ever", "Sym_DAR__in_last_year", "Sym_DAR__count",
-    "Pat_DM__ever", "Pat_DM__in_last_year", "Pat_DM__count",
-    "Pat_Hyp__ever", "Pat_Hyp__in_last_year", "Pat_Hyp__count",
-    "Phy_Sex", "Phy_Age", "Phy_Sys__median_1.5Y", "Phy_Sys__last",
-    "Phy_Dia__last", "Phy_Dia__median_1.5Y", "Blo_Hb__median_1.5Y",
-    "Blo_Hb__last", "Blo_Cre__median_1.5Y", "Blo_Cre__last",
-]
+schema_df = pd.read_csv(os.path.join(DATA_DIR, "processed", "high_risk_HES_big_schema.csv"))
+
+attr_selection = schema_df.loc[schema_df["variable_type"].eq("predictor"), "attr"].to_list()
 
 df = pd.read_csv(os.path.join(DATA_DIR, "processed", "high_risk_HES_big.csv"), index_col=[0, 1])
+
 df = df.rename(columns={"death_event": "zero_days"})
 
 def year_stratification_labels(df: pd.DataFrame, years=(2, 5, 10)) -> pd.DataFrame:
@@ -72,12 +70,25 @@ hosp_cols =  [
 ]
 
 df = year_stratification_labels(df, years=(1, 2, 5))
+
+
 have_hosp_stats_filter = df.loc[:, hosp_cols].notna().any(axis=1)
 df = df.loc[have_hosp_stats_filter]
 
+gather_majority_class = []
+for target_i in target_container:
+    gather_majority_class.append(
+        {"target": target_i, "positive_proportion": df[target_i].value_counts(normalize=True)[1.0]}
+    )
+
+class_stats_df = pd.DataFrame(gather_majority_class)
+
+#if small_test:
+#    df = df.iloc[np.random.choice(len(df), 1000, replace=False)]
+
 filter_no_immediate_hosp = df['post_emmergency_hosp_n_in_90_days'].isna() | df['post_emmergency_hosp_n_in_90_days'].eq(0)
 
-wei_df = pd.DataFrame(columns=targets, index=df.index)
+wei_df = pd.DataFrame(columns=target_container, index=df.index)
 # wei_df.loc[df["death_1_Y"].eq(1), "death_1_Y"] = (df.loc[df["death_1_Y"].eq(1), "days_to_event"]/365.25).apply(lambda x: - np.log(x)) + 1
 wei_df.loc[df["death_1_Y"].notna(), "death_1_Y"] = wei_df.loc[df["death_1_Y"].notna(), "death_1_Y"].fillna(1)
 wei_df.loc[df["death_1_Y"].eq(0) & df["zero_days"].eq(0) & filter_no_immediate_hosp, "death_1_Y"] = (df.loc[df["death_1_Y"].eq(0) & df["zero_days"].eq(0), "days_to_event"]/5_000).apply(lambda x: -np.log(max(0.01, 1 - x))) + 1
@@ -92,10 +103,57 @@ wei_df.loc[df["death_5_Y"].notna(), "death_5_Y"] = wei_df.loc[df["death_5_Y"].no
 
 wei_df = wei_df.astype(float)
 
-hosp_wei_df = pd.DataFrame(columns=targets, index=df.index)
+normal_wei_df = pd.DataFrame(columns=target_container, index=df.index)
+normal_wei_df.loc[df["death_1_Y"].notna(), "death_1_Y"] = normal_wei_df.loc[df["death_1_Y"].notna(), "death_1_Y"].fillna(1)
+normal_wei_df.loc[df["death_2_Y"].notna(), "death_2_Y"] = normal_wei_df.loc[df["death_2_Y"].notna(), "death_2_Y"].fillna(1)
+normal_wei_df.loc[df["death_5_Y"].notna(), "death_5_Y"] = normal_wei_df.loc[df["death_5_Y"].notna(), "death_5_Y"].fillna(1)
+
+multiplier = 3
+
+high_risk_wei_df = normal_wei_df.copy()
+high_risk_filter = df["zero_days"].eq(1) & df["days_to_event"].lt(90)
+high_risk_wei_df.loc[high_risk_filter, "death_1_Y"] = high_risk_wei_df.loc[high_risk_filter, "death_1_Y"] * multiplier
+high_risk_wei_df.loc[high_risk_filter, "death_2_Y"] = high_risk_wei_df.loc[high_risk_filter, "death_2_Y"] * multiplier
+high_risk_wei_df.loc[high_risk_filter, "death_5_Y"] = high_risk_wei_df.loc[high_risk_filter, "death_5_Y"] * multiplier
+
+low_risk_wei_df = normal_wei_df.copy()
+low_risk_filter = filter_no_immediate_hosp & df["zero_days"].eq(0) & df["days_to_event"].gt(1000)
+low_risk_wei_df.loc[low_risk_filter, "death_1_Y"] = low_risk_wei_df.loc[low_risk_filter, "death_1_Y"] * multiplier
+low_risk_wei_df.loc[low_risk_filter, "death_2_Y"] = low_risk_wei_df.loc[low_risk_filter, "death_2_Y"] * multiplier
+low_risk_wei_df.loc[low_risk_filter, "death_5_Y"] = low_risk_wei_df.loc[low_risk_filter, "death_5_Y"] * multiplier
+
+clear_wei_df = normal_wei_df.copy()
+
+clear_wei_df.loc[high_risk_filter, "death_1_Y"] = clear_wei_df.loc[high_risk_filter, "death_1_Y"] * multiplier
+clear_wei_df.loc[high_risk_filter, "death_2_Y"] = clear_wei_df.loc[high_risk_filter, "death_2_Y"] * multiplier
+clear_wei_df.loc[high_risk_filter, "death_5_Y"] = clear_wei_df.loc[high_risk_filter, "death_5_Y"] * multiplier
+
+clear_wei_df.loc[low_risk_filter, "death_1_Y"] = clear_wei_df.loc[low_risk_filter, "death_1_Y"] * multiplier
+clear_wei_df.loc[low_risk_filter, "death_2_Y"] = clear_wei_df.loc[low_risk_filter, "death_2_Y"] * multiplier
+clear_wei_df.loc[low_risk_filter, "death_5_Y"] = clear_wei_df.loc[low_risk_filter, "death_5_Y"] * multiplier
+
+wei_container = {
+    "normal": normal_wei_df,
+    "low_risk_weighted": low_risk_wei_df,
+    "high_risk_weighted": high_risk_wei_df,
+    "clear_examples_weighted": clear_wei_df
+}
+#, "clear_example_weighted": pd.DataFrame()}
+
+gather_wei_class_stats = []
+for wei_type, wei_df in wei_container.items():
+    test_df = pd.merge(wei_df, df.loc[:, target_container], suffixes=("", "_label"), left_index=True, right_index=True)
+    for target_i in target_container:
+        wei_value_counts_df = test_df.groupby(f"{target_i}_label")[target_i].sum()
+        gather_wei_class_stats.append({
+            "wei": wei_type,
+            "target": target_i,
+            "weighted_positive_proportion": wei_value_counts_df[1.0] / wei_value_counts_df.sum()
+        })
+wei_class_stats_df = pd.DataFrame(gather_wei_class_stats)
 
 
-for target_i in targets:
+for target_i in target_container:
     # each target(1_Y,2_Y ...) should have the same amount of non-NA values
     assert df[target_i].count() == wei_df[target_i].count()
 
@@ -103,7 +161,8 @@ model = LGBMClassifier(
     n_estimators=500,
     learning_rate=0.05,
     num_leaves=31,
-    random_state=42
+    random_state=42,
+    verbose=-1
 )
 
 pipeline = Pipeline(
@@ -115,9 +174,9 @@ base_model_process = RandomizedSearchCV(
     param_distributions=lgb_param_grid,
     cv=None,
     scoring='accuracy',
-    n_jobs=10,
+    n_jobs=100,
     verbose=1,
-    n_iter=3,
+    n_iter=100,
 )
 
 cv_method = KFold(n_splits=5, shuffle=True)
@@ -125,21 +184,42 @@ cv_method = KFold(n_splits=5, shuffle=True)
 split_func = cv_method.split
 
 gather_results = []
+gather_predictions = {}
 
-for target_i in targets:
+for wei_type, wei_df in wei_container.items():
+    gather_predictions[wei_type] = []
 
-    filter_index = df[target_i].notna()
+    for target_i in target_container:
+        print(f"{wei_type}, {target_i}")
+        filter_index = df[target_i].notna()
 
-    X = df.loc[filter_index, attr_selection]
-    y = df.loc[filter_index, target_i]
-    w = wei_df.loc[filter_index, target_i]
+        X = df.loc[filter_index, attr_selection]
+        y = df.loc[filter_index, target_i]
+        w = wei_df.loc[filter_index, target_i]
 
-    cv_results = run_cross_validation_wei(
-        split_func, pipeline, compute_binary_classification_metrics_adjusted, X, y, w
-    )
+        cv_results, predictions = run_cross_validation_wei_preds(
+            split_func, pipeline, compute_binary_classification_metrics_adjusted, X, y, w
+        )
+        predictions.rename(columns={0: target_i}, inplace=True)
 
-    cv_results["target"] = target_i
-    gather_results.append(cv_results)
+        cv_results["target"] = target_i
+        cv_results["wei"] = wei_type
+        gather_results.append(cv_results)
+        gather_predictions[wei_type].append(predictions)
 
 results_df = pd.concat(gather_results, ignore_index=True)
+results_df = pd.merge(results_df, class_stats_df, on="target")
+results_df = pd.merge(results_df, wei_class_stats_df, left_on=("wei", "target"), right_on=("wei", "target"))
+results_df.to_csv(os.path.join(RESULTS_DIR, "wei_type_classification.csv"), index=False)
 
+for k, df_container in gather_predictions.items():
+    wei_pred_df = pd.concat(df_container, axis=1)
+    wei_pred_df.to_csv(os.path.join(DATA_DIR, "interim", f"{k}_preds.csv"))
+
+#
+# estimates_df = pd.concat(gather_predictions, axis=1)
+# estimates_event_df = pd.merge(estimates_df, df.loc[:, ["days_to_event", "zero_days"]], left_index=True, right_index=True).rename(columns={"zero_days": "death_event"})
+#
+# sample_estimates_event_df = estimates_event_df.iloc[np.random.choice(len(estimates_event_df), 1000, replace=False)]
+#
+#
