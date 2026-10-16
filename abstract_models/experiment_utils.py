@@ -406,7 +406,7 @@ def run_cross_validation_wei(
         w_train = w.iloc[train_idx]
 
         model.fit(
-            X_train, y_train, classifier__sample_weight=w_train
+            X_train, y_train, model__sample_weight=w_train
         )
         y_pred = model.predict(X_test)
         y_proba = model.predict_proba(X_test)[:, 1]
@@ -441,6 +441,38 @@ def run_cross_validation_wei_preds(
         )
         y_pred = model.predict(X_test)
         y_proba = model.predict_proba(X_test)[:, 1]
+
+        gather_predictions.append(pd.DataFrame(y_proba, index=X_test.index))
+        fold_metrics = metric_function(y_test, y_pred, y_proba)
+        scores.append(fold_metrics)
+
+    return pd.DataFrame(scores), pd.concat(gather_predictions)
+
+
+def run_cross_validation_wei_multi_preds(
+    cv_split: BaseCrossValidator,
+    estimator: BaseEstimator,
+    metric_function: Callable,
+    X,
+    y,
+    w
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    scores = []
+    gather_predictions = []
+
+    for train_idx, test_idx in cv_split(X, y):
+        model = clone(estimator)
+
+        X_train, X_test = X.iloc[train_idx], X.iloc[test_idx]
+        y_train, y_test = y.iloc[train_idx], y.iloc[test_idx]
+
+        w_train = w.iloc[train_idx]
+
+        model.fit(
+            X_train, y_train, classifier__sample_weight=w_train
+        )
+        y_pred = model.predict(X_test)
+        y_proba = model.predict_proba(X_test)
 
         gather_predictions.append(pd.DataFrame(y_proba, index=X_test.index))
         fold_metrics = metric_function(y_test, y_pred, y_proba)

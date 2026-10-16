@@ -19,6 +19,33 @@ matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 
 
+def compute_multiclass_metrics(y_true, y_pred, y_proba):
+    metrics_dict = {}
+
+    metrics_dict["accuracy"] = accuracy_score(y_true, y_pred)
+    metrics_dict["balanced_accuracy"] = balanced_accuracy_score(y_true, y_pred)
+
+    metrics_dict["F1 Score (Macro)"] = f1_score(y_true, y_pred, average="macro")
+    metrics_dict["F1 Score (Weighted)"] = f1_score(y_true, y_pred, average="weighted")
+
+    metrics_dict["Macro Precision"] = precision_score(y_true, y_pred, average="macro")
+    metrics_dict["Macro Recalll"] =  recall_score(y_true, y_pred, average="macro")
+
+    # Multiclass ROC-AUC
+    auc = roc_auc_score(
+        y_true,
+        y_proba,
+        multi_class="ovr",
+        average="macro"
+    )
+    metrics_dict["AUC"] = auc
+
+    # Log loss
+    loss = log_loss(y_true, y_proba)
+    metrics_dict["Log Loss"] = loss
+
+    return metrics_dict
+
 def compute_binary_classification_metrics(y_true, y_pred, y_proba):
     # Basic metrics
     accuracy = accuracy_score(y_true, y_pred)

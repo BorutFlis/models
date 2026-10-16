@@ -25,7 +25,11 @@ schema_df = pd.read_csv(os.path.join(DATA_DIR, "processed", "high_risk_HES_big_s
 
 attr_selection = schema_df.loc[schema_df["variable_type"].eq("predictor"), "attr"].to_list()
 
-df = pd.read_csv(os.path.join(DATA_DIR, "processed", "high_risk_HES_big.csv"), index_col=[0, 1])
+df = pd.read_csv(os.path.join(DATA_DIR, "processed", "high_risk_HES_big.csv"))
+df["date"] = pd.to_datetime(df["date"])
+df["regstartdate"] = pd.to_datetime(df["regstartdate"])
+df = df.loc[(df["date"] - df["regstartdate"]).dt.days.gt(365)]
+df = df.set_index(["patid", "date"])
 
 df = df.rename(columns={"death_event": "zero_days"})
 
@@ -74,6 +78,7 @@ df = year_stratification_labels(df, years=(1, 2, 5))
 
 have_hosp_stats_filter = df.loc[:, hosp_cols].notna().any(axis=1)
 df = df.loc[have_hosp_stats_filter]
+df = df.iloc[np.random.choice(len(df), 1000, replace=False)]
 
 gather_majority_class = []
 for target_i in target_container:

@@ -2,28 +2,85 @@ import os
 import json
 from functools import partial
 from operator import itemgetter
+import re
 
 import numpy as np
 import pandas as pd
 from sklearn.pipeline import Pipeline
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import GridSearchCV, RandomizedSearchCV, KFold, GroupKFold
+from sklearn.base import clone
 from xgboost import XGBClassifier
 from imblearn.over_sampling import SMOTEN
 
 from abstract_models.param_grid import rf_param_grid, xgb_param_grid
-from abstract_models.experiment_utils import run_walk_forward_validation, run_cross_validation
+from abstract_models.experiment_utils import (
+    run_walk_forward_validation, run_cross_validation, run_cross_validation_wei_preds, run_cross_validation_wei_multi_preds
+)
 from abstract_models.imputation import median_imputer
-from abstract_models.metric_utils import compute_binary_classification_metrics, compute_binary_classification_metrics_adjusted, mean_std_metrics_output
+from abstract_models.metric_utils import compute_binary_classification_metrics, compute_multiclass_metrics, compute_binary_classification_metrics_adjusted, mean_std_metrics_output
 from early_diagnosis.data_loader.loader import load_data
-
 
 DATA_DIR = "../data"
 RESULTS_DIR = os.path.join(DATA_DIR, "results")
 DATA_DUMP_DIR = "../data_dump"
 
-experiments_to_run = ["per_gender_cv"] # ["risk_stratification"]
+experiments_to_run = ["secondary_care"] # ["per_gender_cv"] # ["risk_stratification"]
 attr_selections = json.load(open(os.path.join(DATA_DIR, "expert_attr_selection.json")))
+
+if "secondary_care" in experiments_to_run:
+    df = pd.read_csv(os.path.join(DATA_DIR, "raw", "train.csv"), index_col=[0, 1])
+    target = "Dia_MULTI"
+
+    column_map_df = pd.read_csv(os.path.join(DATA_DIR, "column_map_df.csv"))
+    predictor_categories = ["Echo", "Med", "Pat", "ECG", "Blo", "Phy", "Sym"]
+
+    secondary_care_attr_selection = list(
+        filter(
+            lambda x: not re.search(".+_TP$",x),
+            column_map_df.loc[column_map_df["category"].isin(predictor_categories), "cat_attr"].to_list()
+        )
+    )
+    for attr_remove_i in ["Phy_DOB", "Pat_Oth3T", "Pat_Oth2T", "Pat_Oth1T", "Phy_DOD"]:
+        secondary_care_attr_selection.remove(attr_remove_i)
+
+    secondary_care_attr_selection.remove("Echo_SLVF")
+    secondary_care_attr_selection.append("Echo_LVEF")
+
+    df = df.dropna(subset=target)
+
+    X = df.loc[:, df.columns.intersection(secondary_care_attr_selection)]
+    y = df[target].map({"HFPEF":2, "HFREF": 1, "N": 0})
+
+    pipeline = Pipeline(
+        steps=[('preprocessor', median_imputer), ('classifier', RandomForestClassifier())]
+    )
+
+    base_model_process = RandomizedSearchCV(
+        estimator=pipeline,
+        param_distributions=rf_param_grid,
+        cv=None,
+        scoring='accuracy',
+        n_jobs=10,
+        verbose=1,
+        n_iter=5,
+    )
+
+    cv_method = GroupKFold(n_splits=5)
+    cv_split_func = partial(cv_method.split, groups=X.index.get_level_values("ID"))
+
+    w = pd.Series(np.where(X["Blo_NT"].notna(), 2, 1), index=X.index)
+
+    metrics, preds = run_cross_validation_wei_multi_preds(
+        cv_split_func, base_model_process, compute_multiclass_metrics, X, y, w
+    )
+
+    new_pipeline = clone(pipeline)
+    new_pipeline.fit(X, y, classifier__sample_weight=w)
+    feature_importance = pd.Series(
+        new_pipeline["classifier"].feature_importances_,
+        index=new_pipeline["preprocessor"].get_feature_names_out()
+    ).sort_values()
 
 if "cv_by_center_class_balance_exploration" in experiments_to_run:
     attr_selections = json.load(
