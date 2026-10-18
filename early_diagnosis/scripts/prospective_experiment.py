@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+import json
+
 import argparse
 from functools import partial
 import pandas as pd
@@ -121,7 +123,51 @@ def run_experiment(n_splits=5, random_state=42):
 
     return metrics, summary, importances
 
+def prepare_dataset_for_prospective_validation():
+    data = pd.read_csv("../data/processed/prospective_merged.csv")
+    data = data.loc[data["redcap_event_name"].eq("baseline_arm_1")]
+    prospective_map = json.load(open("../data/prospective_map.json"))
+    prospective_map_reversed = {v: k for k, v in prospective_map.items()}
 
+    expert_columns = [
+        'v1_sex',
+         'age',
+         'v1_height',
+         'v1_weight',
+         'creatinine_value',
+         'ntprobnp_value',
+         'egfr_value',
+         'myocardial_infarction',
+         'cabg',
+         'hypertension',
+         'atrial_fibrillation2',
+         'diabetes_mellitus',
+         'shortness_of_breath',
+         'peripheral_oedema',
+         'chest_pain2'
+     ]
+
+    X = data.loc[:, expert_columns]
+    X = X.rename(columns=prospective_map_reversed)
+
+    numeric_cols = ['Phy_Age', 'Phy_Hei', 'Phy_Wei', 'Blo_Cre', 'Blo_NT', 'Blo_EGFR']
+
+    X.loc[:, numeric_cols] = X.loc[:, numeric_cols].apply(partial(pd.to_numeric, errors="coerce"))
+
+    X["Phy_Sex"] = X["Phy_Sex"].map({1: "Male", 2: "Female"})
+
+    binary_cols = ["Pat_PMI", "Pat_CABG", 'Pat_Hyp', 'Pat_AF', 'Pat_DM', 'Sym_DAR', 'Sym_PO', 'Sym_CPR']
+    X.loc[:, binary_cols] = (
+        X.loc[:, binary_cols].apply(partial(pd.to_numeric, errors="coerce")).apply(lambda x: x.map({1: "Y", 0: "N"}))
+    )
+
+    X = X.infer_objects()
+
+    df = pd.concat([
+        X, data.loc[:, ["record_id", "diagnosis_hf", "centre"]].rename(columns={"diagnosis_hf": "Dia_HFD"})
+    ], axis=1)
+    df["Dia_HFD"] = df["Dia_HFD"].map({1: "Y", 0: "N"})
+    return df
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--folds", type=int, default=5)

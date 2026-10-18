@@ -78,7 +78,6 @@ df = year_stratification_labels(df, years=(1, 2, 5))
 
 have_hosp_stats_filter = df.loc[:, hosp_cols].notna().any(axis=1)
 df = df.loc[have_hosp_stats_filter]
-df = df.iloc[np.random.choice(len(df), 1000, replace=False)]
 
 gather_majority_class = []
 for target_i in target_container:
