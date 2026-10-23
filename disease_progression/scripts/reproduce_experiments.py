@@ -22,6 +22,8 @@ from abstract_models.survival import cross_validate_coxph
 
 DATA_DIR = "../data"
 RESULTS_DIR = os.path.join(DATA_DIR, "results")
+DATA_DUMP_DIR = "../data_dump"
+
 
 experiments_to_run = ["cross_entropy_lambda_death"] #["mortality_high_risk"]
 
@@ -47,6 +49,8 @@ imputers = {
 if "cross_entropy_lambda_death" in experiments_to_run:
     TARGET = "death_event"
     EXPOSURE = "days_to_event"
+
+    schema_df = pd.read_csv(os.path.join(DATA_DIR, "processed", "high_risk_HES_big_schema.csv"))
 
     df = pd.read_csv(os.path.join(DATA_DIR, "processed", "high_risk_HES_big.csv"), index_col=0)
 

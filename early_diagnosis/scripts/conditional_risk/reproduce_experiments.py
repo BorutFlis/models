@@ -39,12 +39,7 @@ def load_cohort(data_dir: Path, files: list[str], patients_per_file: int = 200,
     for filename in files:
         path = data_dir / filename
         frame = pd.read_csv(path, dtype={"ID": str}, low_memory=False)
-        with (data_dir / "id_maps" / f"{path.stem}.json").open() as handle:
-            id_map = json.load(handle)
-        mapped = frame["ID"].map(id_map)
-        if mapped.isna().any():
-            raise ValueError(f"Unmapped patient identifiers in {filename}")
-        frame["ID"] = mapped.astype(str)
+
         frame["Timepoint"] = pd.to_datetime(frame["Timepoint"], errors="raise")
         if frame[["ID", "Timepoint"]].isna().any().any():
             raise ValueError(f"Missing identifiers or dates in {filename}")
@@ -166,7 +161,12 @@ def run(args: argparse.Namespace) -> None:
     targets = create_targets(cohort)
     target_container = [f"conditional_{start}_{end}Y" for start, end in INTERVALS]
     features = cohort[predictor_columns(cohort)].copy()
-    numeric = [name for name in features if name.startswith(("Blo_", "Med_")) or (
+    features = features.rename(columns={"Med_LD_permanent": "Med_LD", "Med_Sta_permanent": "Med_Sta"})
+    features["Med_LD"] = features["Med_LD"].map({1: "Y", 2: "N"})
+    features["Med_Sta"] = features["Med_Sta"].map({1: "Y", 2: "N"})
+    features = features.drop(["Med_LD_issued_this_month", "Med_Sta_issued_this_month"], axis=1)
+
+    numeric = [name for name in features if name.startswith("Blo_") or (
         name.startswith("Phy_") and name != "Phy_Sex")]
     features[numeric] = features[numeric].apply(pd.to_numeric, errors="coerce").replace(
         [np.inf, -np.inf], np.nan)
@@ -240,10 +240,10 @@ def run(args: argparse.Namespace) -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--data-dir", type=Path, default=PROJECT_DIR / "data/raw/cprd_NT")
-    parser.add_argument("--files", nargs="+", default=["29.csv", "8.csv"])
+    parser.add_argument("--data-dir", type=Path, default=PROJECT_DIR / "data/raw")
+    parser.add_argument("--files", nargs="+", default=["risk_stratification_sample.csv"])
     parser.add_argument("--output-dir", type=Path, default=PROJECT_DIR / "outputs/conditional_risk_all_timepoints")
-    parser.add_argument("--patients-per-file", type=int, default=200)
+    parser.add_argument("--patients-per-file", type=int, default=500)
     parser.add_argument("--processed-dir", type=Path, default=PROJECT_DIR / "data/processed")
     parser.add_argument("--folds", type=int, default=5)
     parser.add_argument("--n-estimators", type=int, default=300)

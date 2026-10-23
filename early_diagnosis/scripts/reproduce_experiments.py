@@ -12,6 +12,7 @@ from sklearn.model_selection import GridSearchCV, RandomizedSearchCV, KFold, Gro
 from sklearn.base import clone
 from xgboost import XGBClassifier
 from imblearn.over_sampling import SMOTEN
+from statsmodels.stats.contingency_tables import mcnemar
 
 from abstract_models.param_grid import rf_param_grid, xgb_param_grid
 from abstract_models.experiment_utils import (
@@ -25,7 +26,7 @@ DATA_DIR = "../data"
 RESULTS_DIR = os.path.join(DATA_DIR, "results")
 DATA_DUMP_DIR = "../data_dump"
 
-experiments_to_run = ["secondary_care"] # ["per_gender_cv"] # ["risk_stratification"]
+experiments_to_run = ["bmi_vs_weight_height"] #["per_practice_cv"] #["secondary_care"] # ["per_gender_cv"] # ["risk_stratification"]
 attr_selections = json.load(open(os.path.join(DATA_DIR, "expert_attr_selection.json")))
 
 if "secondary_care" in experiments_to_run:
@@ -345,6 +346,64 @@ if "per_practice_cv" in experiments_to_run:
         groupby_col="Validation_Type"
     )
     per_practice_cv_display_df.to_csv(os.path.join(DATA_DIR, "results", "per_practice_cv_display.csv"))
+
+if "bmi_vs_weight_height" in experiments_to_run:
+    df = load_data(os.path.join(DATA_DIR, "processed", "balanced_ED_NT.csv"))
+
+    attrs = list(set(attr_selections["expert"]).intersection(df.columns)) + ['Med_LD_permanent']
+
+    X = df.loc[:, attrs]
+    y = df["Dia_HFD_12M"]
+    pipeline = Pipeline(
+        steps=[('preprocessor', median_imputer), ('classifier', RandomForestClassifier())]
+    )
+
+    base_model_process = RandomizedSearchCV(
+        estimator=pipeline,
+        param_distributions=rf_param_grid,
+        cv=None,
+        scoring='accuracy',
+        n_jobs=10,
+        verbose=1,
+        n_iter=5,
+    )
+    k_fold = KFold(n_splits=5, shuffle=True)
+
+    w = pd.Series([1] * len(X), index=X.index)
+    normal_cv_results, normal_preds = run_cross_validation_wei_preds(
+        k_fold.split, base_model_process, compute_binary_classification_metrics_adjusted, X, y, w
+    )
+
+    X["Phy_BMI"] = X["Phy_Wei"]/(X["Phy_Hei"]/100)**2
+    X = X.drop(["Phy_Hei", "Phy_Wei"], axis=1)
+    w = pd.Series([1] * len(X), index=X.index)
+    bmi_cv_results, bmi_preds = run_cross_validation_wei_preds(
+        k_fold.split, base_model_process, compute_binary_classification_metrics_adjusted, X, y, w
+    )
+    preds_df = pd.concat([
+        y,
+        normal_preds.gt(0.5).astype(int).set_axis(["normal"], axis=1),
+        bmi_preds.gt(0.5).astype(int).set_axis(["bmi"], axis=1)
+    ], axis=1)
+
+
+    preds_df["bmi_correct"] = preds_df["bmi"].eq(preds_df["Dia_HFD_12M"]).astype(int)
+    preds_df["normal_correct"] = preds_df["normal"].eq(preds_df["Dia_HFD_12M"]).astype(int)
+
+    contigency_table = pd.crosstab(index=preds_df["bmi_correct"], columns=preds_df["normal_correct"])
+
+    result = mcnemar(
+        contigency_table,
+        exact=True
+    )
+
+    mean_std_metrics_output(
+        pd.concat([
+            normal_cv_results.assign(model="Initial Attribute Set"),
+            bmi_cv_results.assign(model="eGFR + BMI")
+        ], axis=0),
+        groupby_col="model"
+    ).to_csv(os.path.join(DATA_DIR, "results", "comparing_derived_attributes.csv"))
 
 if "sliding_window_validation" in experiments_to_run:
     df = load_data(os.path.join(DATA_DIR, "processed", "balanced_ED_NT.csv"))
