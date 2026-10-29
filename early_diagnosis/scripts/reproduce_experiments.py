@@ -8,25 +8,30 @@ import numpy as np
 import pandas as pd
 from sklearn.pipeline import Pipeline
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import GridSearchCV, RandomizedSearchCV, KFold, GroupKFold
+from sklearn.model_selection import GridSearchCV, RandomizedSearchCV, KFold, GroupKFold, StratifiedKFold
 from sklearn.base import clone
 from xgboost import XGBClassifier
 from imblearn.over_sampling import SMOTEN
 from statsmodels.stats.contingency_tables import mcnemar
+from sklearn.metrics import confusion_matrix
 
 from abstract_models.param_grid import rf_param_grid, xgb_param_grid
 from abstract_models.experiment_utils import (
-    run_walk_forward_validation, run_cross_validation, run_cross_validation_wei_preds, run_cross_validation_wei_multi_preds
+    run_walk_forward_validation, run_cross_validation, run_cross_validation_preds, run_cross_validation_wei_preds,
+    run_cross_validation_wei_multi_preds
 )
 from abstract_models.imputation import median_imputer
-from abstract_models.metric_utils import compute_binary_classification_metrics, compute_multiclass_metrics, compute_binary_classification_metrics_adjusted, mean_std_metrics_output
+from abstract_models.metric_utils import (
+    compute_binary_classification_metrics, compute_multiclass_metrics, compute_binary_classification_metrics_adjusted,
+    mean_std_metrics_output, wilson_ci, bootstrap_ci, binary_metrics_by_age_cohort
+)
 from early_diagnosis.data_loader.loader import load_data
 
 DATA_DIR = "../data"
 RESULTS_DIR = os.path.join(DATA_DIR, "results")
 DATA_DUMP_DIR = "../data_dump"
 
-experiments_to_run = ["bmi_vs_weight_height"] #["per_practice_cv"] #["secondary_care"] # ["per_gender_cv"] # ["risk_stratification"]
+experiments_to_run = ["sliding_window_validation"] #["per_practice_cv"] #["secondary_care"] # ["per_gender_cv"] # ["risk_stratification"]
 attr_selections = json.load(open(os.path.join(DATA_DIR, "expert_attr_selection.json")))
 
 if "secondary_care" in experiments_to_run:
@@ -218,19 +223,40 @@ if "cv_by_center_class_balance_exploration" in experiments_to_run:
 
 if "per_age_cohort_evaluation" in experiments_to_run:
     df = load_data(os.path.join(DATA_DIR, "processed", "balanced_ED_NT.csv"))
-    df = load_balanced_dataset().dropna(subset=["Phy_Age", "Dia_HFD_12M"])
-    X, y = xy_for_expert_model(df)
 
-    base_model_process = make_base_model_process()
-    k_fold = StratifiedKFold(n_splits=10, shuffle=True, random_state=RANDOM_STATE)
+    attrs = list(set(attr_selections["expert"]).intersection(df.columns)) + ['Med_LD_permanent']
 
-    age_prediction_df = collect_cv_predictions(
+    X = df.loc[:, attrs]
+    y = df["Dia_HFD_12M"]
+
+    pipeline = Pipeline(
+        steps=[('preprocessor', median_imputer), ('classifier', RandomForestClassifier())]
+    )
+
+    base_model_process = RandomizedSearchCV(
+        estimator=pipeline,
+        param_distributions=rf_param_grid,
+        cv=None,
+        scoring='accuracy',
+        n_jobs=10,
+        verbose=1,
+        n_iter=5,
+    )
+    k_fold = StratifiedKFold(n_splits=10, shuffle=True)
+
+    results_df, preds_df = run_cross_validation_preds(
         k_fold.split,
         base_model_process,
+        compute_binary_classification_metrics_adjusted,
         X,
-        y,
-        metadata=df.loc[:, ["Phy_Age"]],
+        y
     )
+
+    age_prediction_df = pd.concat([
+        preds_df.set_axis(["y_proba"], axis=1),
+        df.loc[:, ["Phy_Age", "Dia_HFD_12M"]]],
+        axis=1
+    ).rename(columns={"Dia_HFD_12M": "y_true"})
 
     age_prediction_df.to_csv(
         os.path.join(RESULTS_DIR, "per_age_cohort_evaluation_predictions.csv"),
@@ -295,13 +321,55 @@ if "per_gender_cv" in experiments_to_run:
         verbose=1,
         n_iter=5,
     )
-    per_gender_cv_results = run_cross_validation(
+    per_gender_cv_results, per_gender_preds = run_cross_validation_preds(
         split_func, base_model_process, compute_binary_classification_metrics_adjusted, X, y
     )
     per_gender_cv_results.loc[:, ['Accuracy', 'AUC', 'Precision', 'Sensitivity (Recall)', 'Specificity', 'F1 Score']] = (
         per_gender_cv_results.loc[:, ['Accuracy', 'AUC', 'Precision', 'Sensitivity (Recall)', 'Specificity', 'F1 Score']].round(3)
     )
-    per_gender_cv_results.to_csv(os.path.join(DATA_DIR, "results", "per_gender_csv.csv"))
+
+    preds_df = pd.concat([
+        y.to_frame("y_true"),
+        per_gender_preds.gt(0.5).astype(int).set_axis(["y_pred"], axis=1),
+        per_gender_preds.set_axis(["y_proba"], axis=1),
+        df[["Phy_Sex"]].set_axis(["group"], axis=1)
+    ], axis=1)
+
+    results = []
+    for group, subset in preds_df.groupby('group', sort=True):
+        y_true = subset['y_true'].to_numpy(dtype=int)
+        y_pred = subset['y_pred'].to_numpy(dtype=int)
+        y_proba = subset['y_proba'].to_numpy(dtype=float)
+        tn, fp, fn, tp = confusion_matrix(y_true, y_pred, labels=[0, 1]).ravel()
+
+        counts = {
+            'Accuracy': (tp + tn, tp + tn + fp + fn),
+            'Precision': (tp, tp + fp),
+            'Sensitivity (Recall)': (tp, tp + fn),
+            'Specificity': (tn, tn + fp),
+        }
+        for metric, (successes, total) in counts.items():
+            low, high = wilson_ci(successes, total)
+            results.append({'Group': group, 'N': len(subset), 'Metric': metric,
+                            'Estimate': successes / total if total else np.nan,
+                            'CI_lower': low, 'CI_upper': high, 'Method': 'Wilson'})
+
+        boot = bootstrap_ci(y_true, y_pred, y_proba)
+        for metric, (estimate, (low, high)) in boot.items():
+            results.append({'Group': group, 'N': len(subset), 'Metric': metric,
+                            'Estimate': estimate, 'CI_lower': low,
+                            'CI_upper': high, 'Method': 'Bootstrap percentile'})
+
+        print(f'{group}: N={len(subset)}, TN={tn}, FP={fp}, FN={fn}, TP={tp}')
+
+    output = pd.DataFrame(results)
+    output['95% CI'] = output.apply(
+        lambda r: f"{r['Estimate']:.3f}\n({r['CI_lower']:.3f}–{r['CI_upper']:.3f})", axis=1
+    )
+    output.pivot(index="Group", columns="Metric", values="95% CI").loc[
+        ["Female", "Male"],
+        ["Accuracy", "AUC", "Precision", "Sensitivity (Recall)", "Specificity", "F1 Score"]
+    ].to_csv(os.path.join(DATA_DIR, "results", "per_gender_cv.csv"))
 
 if "per_practice_cv" in experiments_to_run:
     df = load_data(os.path.join(DATA_DIR, "processed", "balanced_ED_NT.csv"))

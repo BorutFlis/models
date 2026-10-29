@@ -1,21 +1,3 @@
-LIFE_Preserved_variable,original_STRATIFYHF_attribute,high_risk_HES_schema_attribute,mapping_status,schema_dtype,notes
-Age,Phy_Age,Phy_Age,Exact field,float64,Age is already a numeric unsuffixed field; Age in years
-Sex,Phy_Sex,Phy_Sex,Exact field,object,Sex is unsuffixed; check coding; M=0; F=1; verify coding expected by model
-Diabetes mellitus,Pat_DM,Pat_DM__ever,Matched,object,Selected __ever for categorical history or __last for numeric measurement; Binary history
-Atrial fibrillation,Pat_AF,Pat_AF__ever,Matched,object,Selected __ever for categorical history or __last for numeric measurement; Binary history
-Current smoking,Pat_CS,Pat_CS__ever,Proxy; temporal mismatch,object,Ever smoking is not current smoking; do not treat as equivalent without verification; Binary status
-Previous HF hospitalization,Hos_CVD,,Unavailable,,Hospitalization counts are not HF-specific; pre_all_hosp_n is not an equivalent predictor; CVD-related hospitalization is broader than HF hospitalization; requires HF-specific events and dates
-COPD,Pat_COPD,Pat_COPD__ever,Matched,object,Selected __ever for categorical history or __last for numeric measurement; Two source descriptions share Pat_COPD: COPD alone and COPD/asthma/chronic bronchitis; select correct definition
-NYHA class,Phy_NYHAC,,Unavailable,,No NYHA field in supplied schema; Confirm NYHA category coding
-Ischaemic heart disease,Pat_PMI; Pat_DAP; Pat_CABG; Pat_PTCA,Pat_PMI__ever | Pat_DAP__ever | Pat_CABG__ever | Pat_PTCA__ever,Derived proxy,object | object | object | object,"Logical OR of available history flags; not a verified match to LIFE-Preserved definition; Potential OR of prior MI, angina, CABG, PTCA; not an exact original definition"
-NT-proBNP,Blo_NT,Blo_NT__last,Matched,float64,Selected __ever for categorical history or __last for numeric measurement; Check measurement units and transformations
-BMI,Phy_BMI,Phy_BMI__last,Matched,float64,Selected __ever for categorical history or __last for numeric measurement; kg/m²
-Heart rate,Phy_PF,,Unavailable,,Phy_PF and other pulse-rate measures absent from supplied schema; Pulse frequency; check beats/min
-Haemoglobin,Blo_Hb,Blo_Hb__last,Matched,float64,Selected __ever for categorical history or __last for numeric measurement; Check units
-eGFR,Blo_EGFR,Blo_EGFR__last,Matched,float64,Selected __ever for categorical history or __last for numeric measurement; Check units
-Confirmed HF [cohort criterion],Dia_HFD,HF_type,Needs coding validation,object,HF_type is present; confirm its labels and confirmed HF meaning; Definitive HF diagnosis
-HFpEF [cohort criterion],HF_type_HFpEF,HF_type | Echo_LVEF__last,Derived cohort filter,object | float64,Confirm HF_type encoding and LVEF >= 50%; values and index timing need validation; Verify LVEF ≥50% and diagnosis
-Index date [cohort criterion],Phy_TP; Dia_TP,,Unavailable,,No explicit index date; regstartdate and other dates are not necessarily index date; Choose consistent index date
-HF hospitalization [outcome],Hos_CVD,,Unavailable,,HES hospitalizations not labelled HF-specific in this schema; Requires HF-specific event and event date
-Cardiovascular death [outcome],,,Unavailable,,death_event and cprd_ddate do not specify CV cause; Requires cause-of-death information
-Non-CV death [competing event],Phy_DOD,,Unavailable,,Death fields cannot distinguish non-CV cause; Date of death alone cannot classify cause
+version https://git-lfs.github.com/spec/v1
+oid sha256:5bdbb033a7af13ee44f076b415c78f88a507d990126c9e258158e1b13d850499
+size 3380

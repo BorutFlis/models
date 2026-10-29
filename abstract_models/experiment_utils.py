@@ -387,6 +387,32 @@ def run_cross_validation(
     return pd.DataFrame(scores)
 
 
+def run_cross_validation_preds(
+    cv_split: BaseCrossValidator,
+    estimator: BaseEstimator,
+    metric_function: Callable,
+    X,
+    y,
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    gather_scores = []
+    gather_predictions = []
+
+    for train_idx, test_idx in cv_split(X, y):
+        model = clone(estimator)
+
+        X_train, X_test = X.iloc[train_idx], X.iloc[test_idx]
+        y_train, y_test = y.iloc[train_idx], y.iloc[test_idx]
+
+        model.fit(X_train, y_train)
+        y_pred = model.predict(X_test)
+        y_proba = model.predict_proba(X_test)[:, 1]
+
+        fold_metrics = metric_function(y_test, y_pred, y_proba)
+        gather_scores.append(fold_metrics)
+        gather_predictions.append(pd.DataFrame(y_proba, index=X_test.index))
+
+    return pd.DataFrame(gather_scores), pd.concat(gather_predictions)
+
 def run_cross_validation_wei(
     cv_split: BaseCrossValidator,
     estimator: BaseEstimator,

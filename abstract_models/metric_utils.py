@@ -17,6 +17,7 @@ from sklearn.metrics import (
 import matplotlib
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
+from statsmodels.stats.proportion import proportion_confint
 
 
 def compute_multiclass_metrics(y_true, y_pred, y_proba):
@@ -310,3 +311,51 @@ def mean_std_metrics_output(
         results_df.groupby(groupby_col)[list(columns)].std().round(std_round).astype(str)
     )
     return output_df
+
+
+def bootstrap_ci(y_true, y_pred, y_prob, n_boot=5000, seed=42):
+    rng = np.random.default_rng(seed)
+
+    y_true = np.asarray(y_true)
+    y_pred = np.asarray(y_pred)
+    y_prob = np.asarray(y_prob)
+
+    n = len(y_true)
+
+    f1_values = []
+    auc_values = []
+
+    for _ in range(n_boot):
+        indices = rng.choice(n, size=n, replace=True)
+
+        yt = y_true[indices]
+        yp = y_pred[indices]
+        prob = y_prob[indices]
+
+        f1_values.append(f1_score(yt, yp))
+
+        if len(np.unique(yt)) == 2:
+            auc_values.append(roc_auc_score(yt, prob))
+
+    f1_ci = np.percentile(f1_values, [2.5, 97.5])
+    auc_ci = np.percentile(auc_values, [2.5, 97.5])
+
+    return {
+        "F1 Score": (
+            f1_score(y_true, y_pred),
+            f1_ci
+        ),
+        "AUC": (
+            roc_auc_score(y_true, y_prob),
+            auc_ci
+        )
+    }
+
+def wilson_ci(successes, total, alpha=0.05):
+    return proportion_confint(
+        count=int(successes),
+        nobs=int(total),
+        alpha=alpha,
+        method="wilson"
+    )
+
