@@ -18,6 +18,7 @@ import matplotlib
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 from statsmodels.stats.proportion import proportion_confint
+from lifelines.utils import concordance_index
 
 
 def compute_multiclass_metrics(y_true, y_pred, y_proba):
@@ -350,6 +351,58 @@ def bootstrap_ci(y_true, y_pred, y_prob, n_boot=5000, seed=42):
             auc_ci
         )
     }
+
+
+def bootstrap_cindex_ci(
+    event_times,
+    predicted_risks,
+    event_observed,
+    n_boot=5000,
+    confidence=0.95,
+    seed=42
+):
+    rng = np.random.default_rng(seed)
+
+    event_times = np.asarray(event_times)
+    predicted_risks = np.asarray(predicted_risks)
+    event_observed = np.asarray(event_observed)
+
+    n = len(event_times)
+
+    # lifelines expects higher scores for longer survival.
+    # Negate risk scores when higher means greater risk.
+    cindex = concordance_index(
+        event_times,
+        -predicted_risks,
+        event_observed
+    )
+
+    bootstrap_scores = []
+
+    for _ in range(n_boot):
+        indices = rng.choice(n, size=n, replace=True)
+
+        try:
+            score = concordance_index(
+                event_times[indices],
+                -predicted_risks[indices],
+                event_observed[indices]
+            )
+            if np.isfinite(score):
+                bootstrap_scores.append(score)
+        except ZeroDivisionError:
+            # No comparable pairs in this sample
+            continue
+
+    alpha = 1 - confidence
+
+    lower, upper = np.quantile(
+        bootstrap_scores,
+        [alpha / 2, 1 - alpha / 2]
+    )
+
+    return cindex, lower, upper
+
 
 def wilson_ci(successes, total, alpha=0.05):
     return proportion_confint(

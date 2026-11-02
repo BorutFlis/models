@@ -17,7 +17,7 @@ from sklearn.model_selection import RandomizedSearchCV, KFold, GroupKFold, Strat
 from abstract_models.param_grid import rf_param_grid, xgb_param_grid, lgb_param_grid, rf_imbalanced_param_grid, lgb_imbalanced_param_grid, nn_param_grid, svm_param_grid
 from abstract_models.experiment_utils import run_cross_validation, run_cross_validation_reg
 from abstract_models.imputation import median_imputer, median_imputer_missing
-from abstract_models.metric_utils import compute_binary_classification_metrics_adjusted, mean_std_metrics_output
+from abstract_models.metric_utils import compute_binary_classification_metrics_adjusted, mean_std_metrics_output, bootstrap_cindex_ci
 from abstract_models.survival import cross_validate_coxph
 
 DATA_DIR = "../data"
@@ -25,7 +25,7 @@ RESULTS_DIR = os.path.join(DATA_DIR, "results")
 DATA_DUMP_DIR = "../data_dump"
 
 
-experiments_to_run = ["cross_entropy_lambda_death"] #["mortality_high_risk"]
+experiments_to_run = ["compare_life_predictions"] #["mortality_high_risk"]
 
 attr_selection = [
     "Sym_DAR__ever", "Sym_DAR__in_last_year", "Sym_DAR__count", "Pat_DM__ever", "Pat_DM__in_last_year", "Pat_DM__count",
@@ -45,6 +45,47 @@ imputers = {
     "median": median_imputer,
     "median_missing": median_imputer_missing
 }
+
+if "compare_life_predictions" in experiments_to_run:
+    life_pred_df = pd.read_csv(os.path.join(RESULTS_DIR, "life_preserved/hfpef/predictions.csv"))
+    dp_df = pd.read_csv(os.path.join(DATA_DIR, "processed/high_risk_HES_big.csv"))
+
+    oof_df = pd.read_csv(os.path.join(DATA_DIR, "interim/clear_examples_weighted_preds.csv"))
+
+    merged_df = pd.merge(
+        life_pred_df.loc[life_pred_df["status"].eq("ok")],
+        dp_df.loc[:, ["patid", "death_event", "days_to_event"]],
+        left_on="row_id", right_on="patid"
+    )
+    merged_df["risk_score"] = merged_df['metrics.lifetimeRiskWithTreatment.text'].str.rstrip("%").astype(float).div(100)
+    merged_df = pd.merge(
+        merged_df, oof_df,
+        left_on="row_id", right_on="patid", how="left"
+    )
+
+    cindex_filter = merged_df["death_1_Y"].notna()
+
+    cindex, lower, upper = bootstrap_cindex_ci(
+        event_times=merged_df.loc[cindex_filter, "days_to_event"],
+        predicted_risks=merged_df.loc[cindex_filter, "risk_score"],
+        event_observed=merged_df.loc[cindex_filter, "death_event"].astype(bool)
+    )
+
+    print(
+        f"C-index: {cindex:.3f} "
+        f"(95% CI: {lower:.3f}–{upper:.3f})"
+    )
+
+    cindex, lower, upper = bootstrap_cindex_ci(
+        event_times=merged_df.loc[cindex_filter, "days_to_event"],
+        predicted_risks=merged_df.loc[cindex_filter, "death_1_Y"],
+        event_observed=merged_df.loc[cindex_filter, "death_event"].astype(bool)
+    )
+
+    print(
+        f"C-index: {cindex:.3f} "
+        f"(95% CI: {lower:.3f}–{upper:.3f})"
+    )
 
 if "cross_entropy_lambda_death" in experiments_to_run:
     TARGET = "death_event"

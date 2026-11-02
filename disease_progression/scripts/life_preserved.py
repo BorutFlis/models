@@ -49,7 +49,7 @@ DEFAULTS = {
     "ntprobnp": 300.0, "heartrate": 70.0, "gfr": 75.0, "hb": 14.0,
 }
 BOUNDS = {"age": (40, 89), "bmi": (18, 55), "ntprobnp": (0, 20000),
-          "heartrate": (40, 120), "gfr": (15, 90), "hb": (0.01, float("inf"))}
+          "heartrate": (40, 120), "gfr": (15, 90), "hb": (3, 11)}
 TABS = {
     "10-year risk": ("currentTenYearRisk", "tenYearRiskWithTreatment", "tenyearARR", "resultBarChart"),
     "Lifetime risk": ("currentLifetimeRisk80", "lifetimeRiskWithTreatment", "lifetimeARR", "resultBarChartLife"),
@@ -105,7 +105,7 @@ def prepare_profile(row: Mapping, mapping: pd.DataFrame, *, defaults=None,
     reference = {**DEFAULTS, **(defaults or {})}
     if hb_unit == "mmolL" and (not defaults or "hb" not in defaults):
         reference["hb"] = DEFAULTS["hb"] / 1.6114
-    values, imputed = {}, {}
+    values, imputed, clipped = {}, {}, {}
     by_id = {INPUT_IDS.get(item.LIFE_Preserved_variable): item
              for item in mapping.itertuples() if item.LIFE_Preserved_variable in INPUT_IDS}
     for field in DEFAULTS:
@@ -131,11 +131,20 @@ def prepare_profile(row: Mapping, mapping: pd.DataFrame, *, defaults=None,
         else:
             value = float(value)
             lower, upper = BOUNDS[field]
+            # The supplied haemoglobin limits are in mmol/L. Keep the
+            # equivalent limits when the form is configured for g/dL.
+            if field == "hb" and hb_unit == "gdL":
+                lower, upper = lower * 1.6114, upper * 1.6114
+            if field in {"age", "bmi", "gfr", "hb", "ntprobnp"} and math.isfinite(value):
+                bounded = min(max(value, lower), upper)
+                if bounded != value:
+                    clipped[field] = {"original": value, "submitted": bounded}
+                value = bounded
             if not math.isfinite(value) or not lower <= value <= upper:
                 raise ValueError(f"{field} outside website range [{lower}, {upper}]: {value}")
         values[field] = value
     values["hb_unit"] = hb_unit
-    return {"inputs": values, "imputed": imputed}
+    return {"inputs": values, "imputed": imputed, "clipped": clipped}
 
 
 def fit_reference_defaults(frame: pd.DataFrame, mapping: pd.DataFrame, *, hb_unit="gdL") -> dict:
@@ -168,6 +177,32 @@ def create_driver(*, headless=True):
     return driver
 
 
+def interact_when_ready(driver, locator, action, description, timeout=60, *,
+                        allow_modal=False, require_visible=True):
+    """Retry idempotent actions on freshly located controls during UI updates."""
+    from selenium.common.exceptions import (
+        ElementClickInterceptedException, ElementNotInteractableException,
+        NoSuchElementException, StaleElementReferenceException,
+    )
+    from selenium.webdriver.support.ui import WebDriverWait
+
+    def attempt(d):
+        if not allow_modal and any(e.is_displayed() for e in d.find_elements("css selector", ".modal, .modal-backdrop")):
+            return False
+        element = d.find_element(*locator)
+        if not element.is_enabled() or (require_visible and not element.is_displayed()):
+            return False
+        if require_visible:
+            d.execute_script("arguments[0].scrollIntoView({block: 'center'});", element)
+        action(element)
+        return True
+
+    return WebDriverWait(driver, timeout, poll_frequency=0.2, ignored_exceptions=(
+        NoSuchElementException, StaleElementReferenceException,
+        ElementNotInteractableException, ElementClickInterceptedException,
+    )).until(attempt, message=f"Could not {description}; locator={locator!r}")
+
+
 def open_calculator(driver, timeout=60):
     from selenium.webdriver.common.by import By
     from selenium.webdriver.common.keys import Keys
@@ -179,9 +214,11 @@ def open_calculator(driver, timeout=60):
         "&& Shiny.shinyapp.$socket.readyState === 1 && document.querySelector('#age'));"
     ))
     # The introductory notice is informational and closes with Escape.
-    wait.until(lambda d: d.find_elements(By.ID, "shiny-modal"))
-    driver.find_element(By.ID, "shiny-modal").send_keys(Keys.ESCAPE)
-    wait.until(lambda d: not any(e.is_displayed() for e in d.find_elements(By.ID, "shiny-modal")))
+    interact_when_ready(driver, (By.ID, "shiny-modal"),
+                        lambda element: element.send_keys(Keys.ESCAPE),
+                        "dismiss introductory modal", timeout, allow_modal=True)
+    wait.until(lambda d: not any(e.is_displayed() for e in d.find_elements(
+        By.CSS_SELECTOR, ".modal, .modal-backdrop")), "Introductory modal or backdrop did not close")
 
 
 def fill_form(driver, inputs: Mapping, treatments=(), timeout=60):
@@ -190,13 +227,19 @@ def fill_form(driver, inputs: Mapping, treatments=(), timeout=60):
     from selenium.webdriver.common.keys import Keys
     from selenium.webdriver.support.ui import WebDriverWait
     for field in BOUNDS:
-        element = driver.find_element(By.ID, field)
-        element.clear()
-        element.send_keys(str(inputs[field]), Keys.TAB)
+        def set_number(element):
+            # Clear on every attempt so a partial send_keys cannot duplicate text.
+            element.clear()
+            element.send_keys(str(inputs[field]), Keys.TAB)
+        interact_when_ready(driver, (By.ID, field), set_number,
+                            f"fill numeric input {field}", timeout)
     for field in RADIO_OPTIONS:
-        target = driver.find_element(By.CSS_SELECTOR, f'input[name="{field}"][value="{inputs[field]}"]')
-        if not target.is_selected():
-            driver.execute_script("arguments[0].click();", target)
+        def select_radio(target):
+            if not target.is_selected():
+                driver.execute_script("arguments[0].click();", target)
+        interact_when_ready(
+            driver, (By.CSS_SELECTOR, f'input[name="{field}"][value="{inputs[field]}"]'),
+            select_radio, f"select radio input {field}", timeout, require_visible=False)
     # Shiny numeric inputs debounce changes; allow their final events to flush.
     time.sleep(0.6)
     # Treatment UI is reactive to the BMI and may replace its input elements.
@@ -205,12 +248,16 @@ def fill_form(driver, inputs: Mapping, treatments=(), timeout=60):
     requested = {TREATMENTS.get(value, value) for value in treatments}
     if not requested <= set(TREATMENTS.values()):
         raise ValueError(f"Unknown treatment: {requested - set(TREATMENTS.values())}")
-    available = {e.get_attribute("value"): e for e in driver.find_elements(By.CSS_SELECTOR, 'input[name="treatment"]')}
-    if not requested <= available.keys():
-        raise ValueError(f"Treatment unavailable for this profile: {requested - available.keys()}")
-    for value, element in available.items():
-        if element.is_selected() != (value in requested):
-            driver.execute_script("arguments[0].click();", element)
+    available = {e.get_attribute("value") for e in driver.find_elements(By.CSS_SELECTOR, 'input[name="treatment"]')}
+    if not requested <= available:
+        raise ValueError(f"Treatment unavailable for this profile: {requested - available}")
+    for value in available:
+        def set_treatment(element):
+            if element.is_selected() != (value in requested):
+                driver.execute_script("arguments[0].click();", element)
+        interact_when_ready(
+            driver, (By.CSS_SELECTOR, f'input[name="treatment"][value="{value}"]'),
+            set_treatment, f"set treatment {value}", timeout, require_visible=False)
     # Confirm actual DOM values before triggering calculation.
     wait.until(lambda d: d.execute_script("""
         return Object.entries(arguments[0]).every(([key,value]) => {
@@ -222,11 +269,15 @@ def fill_form(driver, inputs: Mapping, treatments=(), timeout=60):
 
 
 def parse_result(value: str, label: str) -> dict:
-    match = re.fullmatch(r"\s*(-?\d+(?:\.\d+)?)\s*(%|years?)\s*", value)
+    """Preserve unavailable calculator values as JSON null, never as zero."""
+    match = re.fullmatch(r"\s*(-?\d+(?:\.\d+)?|NA)\s*(%|years?)\s*", value)
     if not match:
         raise ValueError(f"Unexpected calculator output: {value!r}")
-    return {"value": float(match[1]), "unit": "%" if match[2] == "%" else "years",
-            "label": label, "text": value}
+    missing = match[1] == "NA"
+    return {"value": None if missing else float(match[1]),
+            "unit": "%" if match[2] == "%" else "years",
+            "label": label, "text": value,
+            "status": "unavailable" if missing else "ok"}
 
 
 def collect_results(driver, output_dir, timeout=60) -> dict:
@@ -237,7 +288,9 @@ def collect_results(driver, output_dir, timeout=60) -> dict:
     directory.mkdir(parents=True, exist_ok=True)
     wait, metrics, plots = WebDriverWait(driver, timeout), {}, {}
     for title, ids in TABS.items():
-        driver.find_element(By.XPATH, f'//a[@data-toggle="tab" and normalize-space(.)="{title}"]').click()
+        interact_when_ready(
+            driver, (By.XPATH, f'//a[@data-toggle="tab" and normalize-space(.)="{title}"]'),
+            lambda element: element.click(), f"open results tab {title}", timeout)
         for output_id in ids:
             def ready(d):
                 element = d.find_element(By.ID, output_id)
@@ -280,7 +333,13 @@ def predict_profile(driver, profile: dict, output_dir, *, treatments=(), timeout
               String(event.value.html || event.value).includes('%')) window.__lifeComplete = true;
         });
     """)
-    driver.find_element(By.ID, "submit").click()
+    # Do not retry a submitted click inside the same assessment: that could
+    # trigger duplicate calculations. Wait for clickability, then click once.
+    from selenium.webdriver.support import expected_conditions as EC
+    submit = WebDriverWait(driver, timeout).until(
+        EC.element_to_be_clickable((By.ID, "submit")), "Calculate risk button not ready")
+    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", submit)
+    submit.click()
     WebDriverWait(driver, timeout).until(lambda d: d.execute_script("return window.__lifeComplete === true"))
     return {**profile, "treatments": list(treatments), **collect_results(driver, output_dir, timeout)}
 

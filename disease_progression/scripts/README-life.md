@@ -66,8 +66,13 @@ finally:
 `run_batch` accepts an injected prediction callable for alternate transports or
 tests. Rows require unique IDs. Successful unchanged rows resume from checkpoints;
 failed or changed rows run again. Configure `--delay`, `--retries`, `--headed`,
-`--no-resume`, `--output-dir` and `--data-dir` as needed. Out-of-range values fail
-without being clipped. Errors return a nonzero CLI exit code after processing.
+`--no-resume`, `--output-dir` and `--data-dir` as needed. Age is clipped to
+40-89, BMI to 18-55, eGFR to 15-90, and NT-proBNP to 0-20000 before submission.
+Haemoglobin is clipped to 3-11 mmol/L, or the equivalent 4.8342-17.7254 g/dL
+when `--hb-unit gdL` is selected. The supplied 3-11 limits are interpreted as
+mmol/L. The `clipped` field records original
+and submitted values in each result. Other out-of-range values and non-finite
+numbers fail validation. Errors return a nonzero CLI exit code after processing.
 
 ## Results and verification
 
@@ -79,6 +84,10 @@ by the app; it is not automatically converted to remaining years. The flattened
 `predictions.csv` joins results to local row IDs and includes error rows.
 Reduction signs are also preserved as reported by the app, which can return a
 negative difference for a beneficial treatment.
+Unavailable outputs such as `NA%` or `NA years` are saved with `value: null`
+and metric `status: unavailable`, retaining their original text and unit. The
+CSV value is empty. A row status of `ok` means extraction completed; inspect
+individual metric statuses before using the scores.
 
 Each assessment loads a fresh page, dismisses the informational modal, explicitly
 sets inputs and treatment choices, observes a new calculation response, then
@@ -86,6 +95,10 @@ activates all three tabs. This supports identical consecutive predictions withou
 assuming that a result must change. Only predictor inputs are submitted; IDs and
 other source columns stay local. Checkpoints, HTML and plots contain health data
 and should be stored under the same access controls as the source dataset.
+Input and tab interactions wait for enabled controls, scroll native targets into
+view, wait for modal backdrops to disappear, and re-locate controls when Shiny
+replaces them. Transient interaction failures are retried within the configured
+timeout. Timeouts identify the action and selector, such as `fill numeric input age`.
 
 Run offline tests with:
 

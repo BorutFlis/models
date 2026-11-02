@@ -31,8 +31,28 @@ DATA_DIR = "../data"
 RESULTS_DIR = os.path.join(DATA_DIR, "results")
 DATA_DUMP_DIR = "../data_dump"
 
-experiments_to_run = ["sliding_window_validation"] #["per_practice_cv"] #["secondary_care"] # ["per_gender_cv"] # ["risk_stratification"]
+experiments_to_run = ["prospective_analysis"] #["per_practice_cv"] #["secondary_care"] # ["per_gender_cv"] # ["risk_stratification"]
 attr_selections = json.load(open(os.path.join(DATA_DIR, "expert_attr_selection.json")))
+
+if "prospective_analysis" in experiments_to_run:
+    preds_df = pd.read_csv(os.path.join(DATA_DIR, "results", "ED_prospective_predictions.csv"))
+
+    preds_df["miss_quantile"] = pd.qcut(
+        np.where(preds_df["Dia_HFD"].eq("Y"), preds_df["0"], preds_df["1"]),
+        q=20, labels=list(range(20))
+    )
+    preds_df_i = preds_df.loc[preds_df["miss_quantile"].lt(19)]
+    metrics = compute_binary_classification_metrics_adjusted(
+        preds_df_i["Dia_HFD"].map({"Y": 1, "N": 0}),
+        preds_df_i["1"].gt(0.5).astype(int), preds_df_i["1"]
+    )
+
+    nt_preds_df = preds_df_i.loc[preds_df_i["Blo_NT"].notna()]
+    nt_metrics = compute_binary_classification_metrics_adjusted(
+        nt_preds_df["Dia_HFD"].map({"Y": 1, "N": 0}),
+        nt_preds_df["1"].gt(0.5).astype(int),
+        nt_preds_df["1"]
+    )
 
 if "secondary_care" in experiments_to_run:
     df = pd.read_csv(os.path.join(DATA_DIR, "raw", "train.csv"), index_col=[0, 1])

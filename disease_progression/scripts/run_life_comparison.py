@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import os
 from functools import partial
 from pathlib import Path
 
@@ -73,7 +74,16 @@ def prepare_cohort(data_dir=DATA_DIR):
         df["pre_emmergency_hosp_n_in_90_days"].gt(1), "Y", "N"
     )
 
-    X = df.dropna(subset=non_na_attrs).loc[:, overlap_attrs]
+    df = df.dropna(subset=non_na_attrs)
+
+    life_pred_df = pd.read_csv(
+        os.path.join(RESULTS_DIR, "life_preserved/hfpef/predictions.csv")
+    )
+    error_attempts_df = life_pred_df.loc[life_pred_df["status"].eq("error")]
+
+    df = df.loc[error_attempts_df["row_id"].to_list()]
+
+    X = df.loc[:, overlap_attrs]
     X["Previous HF hospitalization"] = df.loc[X.index, "Previous HF hospitalization"]
     X_hfpef = X.loc[df.loc[X.index, "HF_type"].eq("hfpef")]
     return X_hfpef, life_mapping_df

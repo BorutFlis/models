@@ -12,7 +12,7 @@ from abstract_models.param_grid import lgb_param_grid
 from abstract_models.experiment_utils import run_cross_validation, run_cross_validation_wei, run_cross_validation_wei_preds
 from abstract_models.metric_utils import compute_binary_classification_metrics_adjusted
 
-small_test = True
+small_test = False
 
 DATA_DIR = "../data"
 DATA_DUMP_DIR = "../data_dump"
@@ -87,8 +87,8 @@ for target_i in target_container:
 
 class_stats_df = pd.DataFrame(gather_majority_class)
 
-#if small_test:
-#    df = df.iloc[np.random.choice(len(df), 1000, replace=False)]
+if small_test:
+    df = df.iloc[np.random.choice(len(df), 1000, replace=False)]
 
 filter_no_immediate_hosp = df['post_emmergency_hosp_n_in_90_days'].isna() | df['post_emmergency_hosp_n_in_90_days'].eq(0)
 
