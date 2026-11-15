@@ -1,0 +1,14 @@
+{
+  "dataset": "data/processed/high_risk_HES_big.csv",
+  "schema": "data/processed/high_risk_HES_big_schema.csv",
+  "baseline": "data/interim/clear_examples_weighted_preds.csv",
+  "output_dir": "data/results/high_risk_1000_adjusted_no_hosp",
+  "target": "high_risk_1000_adjusted_no_hosp",
+  "n_splits": 5,
+  "random_state": 42,
+  "random_forest": {
+    "n_estimators": 100,
+    "n_jobs": 8
+  },
+  "prediction_batch_size": 50000
+}
