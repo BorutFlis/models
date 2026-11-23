@@ -74,10 +74,10 @@ df = df.loc[have_hosp_stats_filter]
 print(f"after hosp filter {df.shape}")
 
 method_study_df = df.loc[(df["date"] - df["regstartdate"]).dt.days.gt(365)]
-print(f"after 1-year registration minimum {df.shape}")
+print(f"after 1-year registration minimum {method_study_df.shape}")
 
 # filtering for the clinical study
-hf_type_df = df.dropna(subset="HF_type").reset_index(drop=True)
+hf_type_df = method_study_df.dropna(subset="HF_type").reset_index(drop=True)
 print(f"after including only HF-type {hf_type_df.shape}")
 
 df = hf_type_df

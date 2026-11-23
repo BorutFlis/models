@@ -1,0 +1,18 @@
+{
+  "dataset": "data/processed/high_risk_HES_big.csv",
+  "schema": "data/processed/high_risk_HES_big_schema.csv",
+  "cohort": "data/processed/hf_type_mortality_cohort.parquet",
+  "output": "data/results/hf_type_mortality",
+  "years": [1, 2, 5],
+  "days_per_year": 365.25,
+  "duration_bins_days": [365.25, 730.5, 1826.25],
+  "folds": 5,
+  "seed": 42,
+  "oof_save_below": 10000,
+  "random_forest": {
+    "n_estimators": 100,
+    "max_depth": 16,
+    "min_samples_leaf": 3,
+    "n_jobs": 6
+  }
+}
