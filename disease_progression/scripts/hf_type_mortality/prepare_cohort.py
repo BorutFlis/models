@@ -2,13 +2,17 @@
 
 import hashlib
 import json
+import sys
 
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pandas as pd
 
-from utils import CONFIG, PROJECT, filter_cohort, resolve_source
+from utils import CONFIG, PROJECT, filter_cohort
+
+sys.path.insert(0, str(PROJECT.parent))
+from abstract_models.data_source import resolve_source
 
 
 REQUIRED = ["patid", "date", "regstartdate", "death_event", "days_to_event",

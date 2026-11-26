@@ -1,4 +1,4 @@
-"""Cohort construction and source resolution for the HES mortality experiment."""
+"""Cohort construction for the HES mortality experiment."""
 
 import json
 from pathlib import Path
@@ -9,19 +9,6 @@ import pandas as pd
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT = SCRIPT_DIR.parents[1]
 CONFIG = json.loads((SCRIPT_DIR / "config.json").read_text(encoding="utf-8"))
-
-
-def resolve_source(path):
-    """Read a cached LFS object directly when the working tree contains a pointer."""
-    with path.open("rb") as source:
-        if source.readline().strip() != b"version https://git-lfs.github.com/spec/v1":
-            return path
-        oid = source.readline().decode().strip().removeprefix("oid sha256:")
-        size = int(source.readline().decode().strip().removeprefix("size "))
-    cached = PROJECT.parent / ".git" / "lfs" / "objects" / oid[:2] / oid[2:4] / oid
-    if not cached.is_file() or cached.stat().st_size != size:
-        raise FileNotFoundError(f"Restore the Git LFS content for {path} before running.")
-    return cached
 
 
 def filter_cohort(data, hospitalization_columns):

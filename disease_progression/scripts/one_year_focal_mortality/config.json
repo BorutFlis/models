@@ -1,0 +1,24 @@
+{
+  "dataset": "data/processed/high_risk_HES_big.csv",
+  "schema": "data/processed/high_risk_HES_big_schema.csv",
+  "cohort": "data/processed/one_year_focal_mortality_cohort.parquet",
+  "comparison": "data/results/extreme_outcome_comparison/mortality_comparison.csv",
+  "output": "data/results/one_year_focal_mortality",
+  "horizon_days": 365.25,
+  "min_registration_days_exclusive": 365,
+  "folds": 5,
+  "seed": 42,
+  "focal_alpha": 0.75,
+  "focal_gamma": 2.0,
+  "minimum_hessian": 0.000001,
+  "classification_threshold": 0.5,
+  "lightgbm": {
+    "n_estimators": 100,
+    "learning_rate": 0.05,
+    "num_leaves": 31,
+    "n_jobs": 8,
+    "deterministic": true,
+    "force_col_wise": true,
+    "verbosity": -1
+  }
+}
